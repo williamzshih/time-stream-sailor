@@ -1,0 +1,26 @@
+{
+  "name": "time-stream-sailor",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/williamzshih/time-stream-sailor.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/williamzshih/time-stream-sailor/issues"
+  },
+  "homepage": "https://github.com/williamzshih/time-stream-sailor#readme",
+  "dependencies": {
+    "three": "^0.173.0"
+  },
+  "devDependencies": {
+    "vite": "^6.1.0"
+  }
+}
