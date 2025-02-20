@@ -79,11 +79,11 @@ const point_opacity = 0.7;
 
 // particle properties
 const mass = 1;
-const mass_boundary = 3;
-const stiffness = 0.2;
+const mass_boundary = 2;
+const stiffness = 0.5;
 const viscosity = 100; // mu in equations -- viscosity of the fluid that resists velocity change
 const smoothing_radius = 0.2;
-const grav_strength = 2.; // strength of gravity
+const grav_strength = 2.5; // strength of gravity
 const grav_drop_off_strength = 20; // how quickly gravity drops off when near boundary
 const boundary_force_strength = 0.; // strength of boundary force
 const boundary_collision_elasticity = 1; // what proportion of velocity is retained after collision with boundary -- THIS OFTEN CAUSES INSTABILITY if not =1
