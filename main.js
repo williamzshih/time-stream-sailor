@@ -1,9 +1,14 @@
 // SETUP:
 //  npm install --save three    
 //  npm install --save-dev vite  
+
+// npm install dat.gui --save-dev
+// npm install @types/dat.gui --save-dev
+
 //  npx vite
 
 import * as THREE from 'three';
+import * as dat from 'dat.gui';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { compute } from 'three/tsl';
 
@@ -68,26 +73,32 @@ const phong_material = new THREE.MeshPhongMaterial({
 // --------------------------------------------------------------------------------------------------
 // ----------------------------------- SET UP POINTS OF THE FLUID -----------------------------------
 const num_fluid_points = 500; // number of points in the fluid
-const num_boundary_particles = 100; // number of points on the boundary
+const num_boundary_particles = 150; // number of points on the boundary
 const num_points = num_fluid_points + num_boundary_particles; // number of points in the fluid
-const point_radius = 0.01; // <= 0.02 good for testing
-const point_opacity = 0.7;
+const proportion_of_box_filled = 0.4; // proportion of box filled by fluid without gravity?
 
-// // prettier fluid
-// const point_radius = 0.05; // <= 0.02 good for testing
-// const point_opacity = 0.2;
+// testing fluid
+const test_view = true; // view for testing purposes
+let point_radius = 0.01; // <= 0.02 good for testing
+let point_opacity = 0.7;
+
+if (test_view == false) {
+    // prettier fluid
+    point_radius = 0.05; // <= 0.02 good for testing
+    point_opacity = 0.2;
+}
 
 // particle properties
 const mass = 1;
-const mass_boundary = 2;
-const stiffness = 0.5;
+const mass_boundary = 1;
+const stiffness = 0.4;
 const viscosity = 100; // mu in equations -- viscosity of the fluid that resists velocity change
 const smoothing_radius = 0.2;
 const grav_strength = 2.5; // strength of gravity
 const grav_drop_off_strength = 20; // how quickly gravity drops off when near boundary
 const boundary_force_strength = 0.; // strength of boundary force
-const boundary_collision_elasticity = 1; // what proportion of velocity is retained after collision with boundary -- THIS OFTEN CAUSES INSTABILITY if not =1
 const boundary_buffer = 0.05;
+const clamp_density = true; // aids in issue of density near free surface by ensuring minimum density at all points
 
 // stability controls
 const min_separation = 0.00005; // ** VERY IMPORTANT - minimum separation between particles to prevent division by zero
@@ -97,14 +108,16 @@ const BUFFER = 0.001; // Small buffer to prevent sticking
 const DAMPING = 0.8;  // Velocity damping factor
 
 // point visualization
+const boundary_point_size = 0.005;
 const fluid_point_geometry = new THREE.SphereGeometry(point_radius);
+const boundary_point_geometry = new THREE.BoxGeometry( boundary_point_size, boundary_point_size, boundary_point_size );
 const fluid_material = new THREE.MeshBasicMaterial({ color: 0x1AA9D0, opacity: point_opacity, transparent: true,});
-const boundary_material = new THREE.MeshBasicMaterial({ color: 0xff0000, opacity: point_opacity, transparent: true,});
+const boundary_material = new THREE.MeshBasicMaterial({ color: 0xff0000, opacity: 1, transparent: true,});
 // --------------------------------------------------------------------------------------------------
 // --------------------------------------------------------------------------------------------------
 const total_volume = 1 * 1; // volume of the box
 const volume_per_particle = total_volume / num_fluid_points; // volume per particle
-const rest_density = mass / volume_per_particle; // rest density of the fluid
+const rest_density = mass / (volume_per_particle * proportion_of_box_filled); // set rest density of the fluid so that it fills specified size in box
 const boundary_density = 0.001; // effective density of boundary used for calculating boundary forces
 
 // visualize the box boundary for fluid
@@ -118,10 +131,21 @@ line.position.set(0.5,0.5,0.5);
 scene.add( line );
 
 
+// // ******************* GUI FOR TESTING VALUES *******************
+// const box_geometry = new THREE.BoxGeometry(1, 1, 1);
+// const box_material = new THREE.MeshPhongMaterial({ color: 0x00ff00});
+// const box_mesh = new THREE.Mesh(box_geometry, box_material);
+// scene.add(box_mesh);
+
+// const gui = new dat.GUI();
+// const cubeFolder = gui.addFolder('Cube');
+// cubeFolder.add(box_mesh.rotation, 'x', 0, Math.PI * 2).name('Rotation X');
+// cubeFolder.open();
+
 
 // Instantiate the fluid points
 let fluid_points = Array.from({length: num_fluid_points}, () => new THREE.Mesh(fluid_point_geometry, fluid_material));
-let boundary_points = Array.from({length: num_boundary_particles}, () => new THREE.Mesh(fluid_point_geometry, boundary_material));
+let boundary_points = Array.from({length: num_boundary_particles}, () => new THREE.Mesh(boundary_point_geometry, boundary_material));
 // let all_points = fluid_points.concat(boundary_points);
 
 // initialize positions and add to scene
@@ -129,7 +153,7 @@ for(let i=0; i<num_fluid_points; i++) {
     fluid_points[i].position.set(Math.random()*0.3 + 0.6, Math.random()*0.4 + 0.2, 0); // Set position to random in box (0,0,0) - (1,1,1)
 	scene.add(fluid_points[i]);
 }
-const num_points_per_side = num_boundary_particles / 4;
+const num_points_per_side = num_boundary_particles / 3;
 for (let i = 0; i < num_boundary_particles; i++) {
 
     // y = 0 boundary
@@ -140,12 +164,8 @@ for (let i = 0; i < num_boundary_particles; i++) {
     else if (i >= num_points_per_side && i < 2 * num_points_per_side) {
         boundary_points[i].position.set(1 + boundary_buffer, i % num_points_per_side / num_points_per_side, 0);
     } 
-    // y = 1 boundary
-    else if (i >= 2 * num_points_per_side && i < 3 * num_points_per_side) {
-        boundary_points[i].position.set(1 - i % num_points_per_side / num_points_per_side, 1 + boundary_buffer, 0);
-    }
     // x = 0 boundary
-    else {
+    else if (i >= 2 * num_points_per_side && i < 3 * num_points_per_side) { 
         boundary_points[i].position.set(-boundary_buffer, 1 - i % num_points_per_side / num_points_per_side, 0);
     }
     scene.add(boundary_points[i]);
@@ -361,6 +381,10 @@ function compute_density(fluid_positions_arg) {
             density[i] += boundary_correction_factor * mass * kernel_value;
         }
 
+
+        if (clamp_density == true) {
+            density[i] = Math.max(density[i], rest_density); // help the particle deficiency problem at free surface
+        }
         // // Protect against too low density - does not help with stability
         // const min_density = rest_density * 0.1;
         // density[i] = Math.max(density[i], min_density);
