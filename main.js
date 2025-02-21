@@ -46,8 +46,8 @@ const controls = new OrbitControls(camera, renderer.domElement);
 // camera.position.set(1.5, 1.5, 1.5);
 // controls.target.set(0, 0, 0);
 // 2D testing
-camera.position.set(0.5, 0.5, 0.9);
-controls.target.set(0.5, 0.5, 0);
+camera.position.set(1.1, 0.5, 1.6);
+controls.target.set(0.3, 0.1, 0);
 
 // Rendering 3D axis
 const createAxisLine = (color, start, end) => {
@@ -91,6 +91,7 @@ var params = {
     // FLUID VISULIZATION
     point_radius: 0.01, // 0.05 nice visually
     point_opacity: 0.7,
+    show_neighbor_search: true,
 
     // BOUNDARY VISUALIZATION
     boundary_point_size: 0.01,
@@ -101,13 +102,14 @@ var params = {
     stiffness: 0.5,
     viscosity: 400,             // unstable for > 500 --- mu in equations, viscosity of the fluid that resists velocity change
     smoothing_radius: 0.1,      // <= 0.1 nicer looking
-    grav_strength: 3,
-    rest_density_factor: 10,    // unstable for < 2
+    grav_strength: 1.5,
+    rest_density_factor: 1,    // unstable for < 2
 };
 
 // NUMBER OF POINTS
-const num_fluid_points = 400; // number of points in the fluid // ***** NOTE >30 FPS when <510 fluid points with no algorithmic acceleration
-const num_boundary_particles = 150; // number of points on the boundary
+// in 3d max ~1500 with current smoothing radius of 0.1
+const num_fluid_points = 1000; // number of points in the fluid // ***** NOTE in 2D: >30 FPS when <510 fluid points with no algorithmic acceleration. With algorithmic acceleration can do ~800
+const num_boundary_particles = 0; // number of points on the boundary
 const num_points = num_fluid_points + num_boundary_particles; // number of points in the fluid
 
 // PARTICLE PROPERTIES (NON-GUI)
@@ -135,7 +137,7 @@ const test_material = new THREE.MeshBasicMaterial({ color: 0xff0000, opacity: pa
 const neighbor_material = new THREE.MeshBasicMaterial({ color: 0xffff00, opacity: params.point_opacity, transparent: true,});
 
 // OTHER CONSTANTS
-const total_volume = 1 * 1; // volume of the box
+const total_volume = 1 * 1 * 1; // volume of the box
 const volume_per_particle = total_volume / num_fluid_points; // volume per particle
 // const rest_density = params.rest_density_factor * mass / volume_per_particle; // set rest density of the fluid so that it fills specified size in box
 // const boundary_density = 0.001; // effective density of boundary used for calculating boundary forces
@@ -168,6 +170,7 @@ VisualsFolder.add(params, "point_radius", 0.005, 0.1).name('Point Radius').onCha
     });
 });
 VisualsFolder.add(fluid_material, "opacity", 0, 1).name('Point Opacity');
+VisualsFolder.add(params, 'show_neighbor_search').name('Show Neighbor Search?');
 VisualsFolder.open();
 
 
@@ -193,11 +196,11 @@ BoundaryFolder.open();
 
 // FLUID PROPERTIES
 const FluidFolder = gui.addFolder('Fluid Properties');
-FluidFolder.add(params, 'stiffness', 0.05, 1).name('stiffness');
-FluidFolder.add(params, 'viscosity', 0, 500).name('viscosity');
+FluidFolder.add(params, 'stiffness', 0.05, 5).name('stiffness');
+FluidFolder.add(params, 'viscosity', 0, 2000).name('viscosity');
 FluidFolder.add(params, 'smoothing_radius', 0.02, 0.5).name('smoothing_radius');
 FluidFolder.add(params, 'grav_strength', 0, 10).name('grav_strength');
-FluidFolder.add(params, 'rest_density_factor', 2.5, 25).name('Rest Density');
+FluidFolder.add(params, 'rest_density_factor', 0.6, 5).name('Rest Density');
 FluidFolder.open();
 // *********************************************************************************
 
@@ -211,7 +214,7 @@ let boundary_points = Array.from({length: num_boundary_particles}, () => new THR
 
 // INITIALIZE FLUID AND ADD TO SCENE
 for(let i=0; i<num_fluid_points; i++) {
-    fluid_points[i].position.set(Math.random()*0.3 + 0.6, Math.random()*0.4 + 0.2, 0); // Set position to random in box (0,0,0) - (1,1,1)
+    fluid_points[i].position.set(Math.random()*0.3 + 0.6, Math.random()*0.4 + 0.2, Math.random()*0.5 + 0.1); // Set position to random in box (0,0,0) - (1,1,1)
 	scene.add(fluid_points[i]);
 }
 
@@ -258,30 +261,30 @@ function animate() {
     animation_time += dt; 
 
 
-    // ----------------------------------------------- just see if this runs
+    // *********** VISUALLY VERIFYING THAT THE NEIGHBOR SEARCH ALGORITHM WORKS ****************
     // Update the spatial_lookup array
-    update_spatial_lookup();
-    const test_ind = 0;
-    // try to change color of the test particle
-    // first make all same color, then modify
-    for (let i=0; i<num_fluid_points; i++){
-        fluid_points[i].material = fluid_material;
-    }
-    
-    const test_point = fluid_points[test_ind].position.clone();
-    // get_neighbor_indices(test_point);
-    const neighbor_inds = get_neighbor_indices(test_point);
-    for (let i=0; i<neighbor_inds.length; i++){
-        const neighbor_idx = neighbor_inds[i];
-        fluid_points[neighbor_idx].material = neighbor_material;
-    }
+    update_spatial_lookup(); // DO THIS FOR EVERY FRAME
 
-    // make test point red
-    fluid_points[test_ind].material = test_material;
-    // ----------------------------------------------- 
+    // first make all same color, then modify
+    for (let i=0; i<num_fluid_points; i++){ fluid_points[i].material = fluid_material; }
+
+    if (params.show_neighbor_search == true) {
+        const test_ind = 0;
+
+        // make test point red
+        fluid_points[test_ind].material = test_material;
+
+        // make neighbor points yellow
+        const test_point = fluid_points[test_ind].position.clone();
+        for (const neighbor_idx of get_neighbor_indices(test_point)){
+            if (neighbor_idx == test_ind) {continue;}
+            fluid_points[neighbor_idx].material = neighbor_material;
+        }
+    }
+    // **************************************************************************************** 
 
     const current_positions = fluid_points.map(p => p.position.clone());
-    // i've seen computing density with predicted positions can be unstable
+    // i've seen computing density with predicted positions can be unstable, despite being accepeted method in literature. might need to test again later.
     compute_density(current_positions);
 
     // compute total force on each FLUID particle (boundary particles stationary)
@@ -418,10 +421,9 @@ function compute_viscosity_force(particle_index){
     const current_position = fluid_points[particle_index].position.clone();
 
     // fluid contribution
-    for(let j=0; j<num_fluid_points; j++) {
-        if (j == particle_index) {
-            continue;
-        }
+    for (const j of get_neighbor_indices(current_position)){
+        if (j == particle_index) {continue;}
+
         const j_to_i = fluid_points[j].position.clone().sub(current_position);
         const dist = j_to_i.length();
         const kernel_deriv = kernel2D_deriv( dist );
@@ -457,11 +459,8 @@ function compute_density(fluid_positions_arg) {
         const boundary_correction_factor = mass_boundary / mass;
 
         // fluid contribution
-        for(let j=0; j<num_fluid_points; j++) {
-            // no self-contribution
-            if (j == i) {
-                continue;
-            }
+        for (const j of get_neighbor_indices(fluid_positions_arg[i])){
+            if (j == i) {continue;}
 
             const dist = fluid_positions_arg[i].distanceTo(fluid_positions_arg[j]);
             const kernel_value = kernel2D(dist);
@@ -491,10 +490,9 @@ function compute_pressure_acceleration(i) {
     const current_position = fluid_points[i].position.clone();
 
     // fluid contribution
-    for(let j=0; j<num_fluid_points; j++) {
-        if (j == i) {
-            continue;
-        }
+    for (const j of get_neighbor_indices(current_position)){
+        if (j == i) {continue;}
+
         const j_to_i = current_position.clone().sub(fluid_points[j].position.clone());
         const dist = j_to_i.length();
         const kernel_deriv = kernel2D_deriv( dist );
@@ -551,17 +549,27 @@ function handleBoundaryCollisions(i) {
         // all_points[i].position.x = 1 - BUFFER;
         velocity[i].x = -Math.abs(velocity[i].x) * DAMPING;
     }
+    // y = 0
+    if(fluid_points[i].position.y < 0 + BUFFER) {
+        fluid_points[i].position.y = 0 + BUFFER;
+        // all_points[i].position.y = 0 + BUFFER;
+        velocity[i].y = Math.abs(velocity[i].y) * DAMPING;
+    }
     // y = 1
     if (fluid_points[i].position.y > 1 - BUFFER) {
         fluid_points[i].position.y = 1 - BUFFER;
         // all_points[i].position.y = 1 - BUFFER;
         velocity[i].y = -Math.abs(velocity[i].y) * DAMPING;
     }
-    // y = 0
-    if(fluid_points[i].position.y < 0 + BUFFER) {
-        fluid_points[i].position.y = 0 + BUFFER;
-        // all_points[i].position.y = 0 + BUFFER;
-        velocity[i].y = Math.abs(velocity[i].y) * DAMPING;
+    // z = 0
+    if(fluid_points[i].position.z < 0 + BUFFER) {
+        fluid_points[i].position.z = 0 + BUFFER;
+        velocity[i].z = Math.abs(velocity[i].z) * DAMPING;
+    }
+    // z = 1
+    if (fluid_points[i].position.z > 1 - BUFFER) {
+        fluid_points[i].position.z = 1 - BUFFER;
+        velocity[i].z = -Math.abs(velocity[i].z) * DAMPING;
     }
 }
 
@@ -672,44 +680,6 @@ function get_neighbor_indices(sample_point) {
         }
     }
 
-    // this works!
-    // // find cell of sample point
-    // const sample_cell_coords = position_to_cell_coord(sample_point);
-    // const cell_key = get_LU_key_from_hash( hash_cell_coord(sample_cell_coords));
-
-    // const start_ind = start_indices[cell_key];
-    // for(let lookup_ind = start_ind; lookup_ind < num_fluid_points; lookup_ind++){
-    //     if (spatial_lookup[lookup_ind][1] != cell_key) { break; }
-    //     neighbor_indices.push(spatial_lookup[lookup_ind][0]); // this is a particle index
-    // }
-
-
-
-
-    // // look through sample point cell and all its neighbors
-    // for (let i=0; i<3; i++){
-    //     for (let j=0; j<3; j++){
-    //         for (let k=0; k<3; k++){
-    //             const curr_cell_coords = sample_cell_coords + [offsets[i], offsets[j], offsets[k]];
-
-    //             // get key of current cell and look at all points with that key
-    //             const curr_cell_key = get_LU_key_from_hash( hash_cell_coord(curr_cell_coords) );
-    //             const cell_start_ind = start_indices[curr_cell_key];
-
-    //             for (let lookup_ind = cell_start_ind; lookup_ind < num_fluid_points; lookup_ind++){
-    //                 // exit loop if not looking at correct key
-    //                 if (spatial_lookup[lookup_ind][1] != curr_cell_key) { break; }
-
-    //                 // particle within smoothing radius
-    //                 const particle_ind = spatial_lookup[lookup_ind][0];
-    //                 const distSq = fluid_points[particle_ind].position.clone().sub(sample_point).lengthSq();
-    //                 if (distSq <= rSq) {
-    //                     neighbor_indices.push(particle_ind);
-    //                 }
-    //             }
-    //         }
-    //     }
-    // }
 
     return neighbor_indices;
 }
