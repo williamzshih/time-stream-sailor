@@ -43,9 +43,17 @@ scene.add(directionalLight);
 
 function getRandomGeometry() {
   const geometries = [
-    new THREE.BoxGeometry(Math.random() + 1, Math.random() + 1, Math.random() + 1),
+    new THREE.BoxGeometry(
+      Math.random() + 1,
+      Math.random() + 1,
+      Math.random() + 1
+    ),
     new THREE.CapsuleGeometry(Math.random() + 1, Math.random() + 1),
-    new THREE.CylinderGeometry(Math.random() + 1, Math.random() + 1, Math.random() + 1),
+    new THREE.CylinderGeometry(
+      Math.random() + 1,
+      Math.random() + 1,
+      Math.random() + 1
+    ),
     new THREE.DodecahedronGeometry(Math.random() + 1),
     new THREE.IcosahedronGeometry(Math.random() + 1),
     new THREE.OctahedronGeometry(Math.random() + 1),
@@ -88,8 +96,8 @@ const tempVector = new THREE.Vector3();
 
 loader.load("boat.obj", (boat) => {
   boat.scale.set(0.01, 0.01, 0.01);
-
-  // start off rotated later
+  boat.rotation.x = -Math.PI / 2;
+  boat.rotation.z = Math.PI / 2;
 
   boat.traverse((child) => {
     if (child.isMesh) {
@@ -104,7 +112,7 @@ loader.load("boat.obj", (boat) => {
   scene.add(player);
 
   tempBoundingBox.setFromObject(player).getSize(tempVector);
-  tempVector.multiplyScalar(0.8);
+  tempVector.multiplyScalar(0.9);
   // make meshes more accurate later
   playerCollisionMesh = new THREE.Mesh(
     new THREE.BoxGeometry(tempVector.x, tempVector.y, tempVector.z)
@@ -125,7 +133,7 @@ loader.load("boat.obj", (boat) => {
   scene.add(other);
 
   tempBoundingBox.setFromObject(other).getSize(tempVector);
-  tempVector.multiplyScalar(0.8);
+  tempVector.multiplyScalar(0.9);
   // make meshes more accurate later
   otherCollisionMesh = new THREE.Mesh(
     new THREE.BoxGeometry(tempVector.x, tempVector.y, tempVector.z)
@@ -227,7 +235,7 @@ const keys = {
   a: false,
   d: false,
   " ": false,
-  Shift: false,
+  shift: false,
 };
 
 window.addEventListener("keydown", (e) => {
@@ -235,8 +243,6 @@ window.addEventListener("keydown", (e) => {
     keys[e.key.toLowerCase()] = true;
   } else if (e.key === " ") {
     keys[" "] = true;
-  } else if (e.key === "Shift") {
-    keys.Shift = true;
   }
 });
 
@@ -245,40 +251,48 @@ window.addEventListener("keyup", (e) => {
     keys[e.key.toLowerCase()] = false;
   } else if (e.key === " ") {
     keys[" "] = false;
-  } else if (e.key === "Shift") {
-    keys.Shift = false;
   }
 });
 
-const moveDirection = new THREE.Vector3();
-const camDirection = new THREE.Vector3();
-const camRight = new THREE.Vector3();
+let velocity = 0;
+const ACCELERATION = 0.005;
+const ROTATION_SPEED = 0.025;
+const FRICTION = 0.99;
+const COLLISION_CHECK_RADIUS = 10;
+const VERTICAL_SPEED = 0.05;
+const direction = new THREE.Vector3(0, 0, -1);
 const worldUp = new THREE.Vector3(0, 1, 0);
 const toObstacle = new THREE.Vector3();
-const MTV = new THREE.Vector3();
-const MOVE_SPEED = 0.1;
-const COLLISION_CHECK_RADIUS = 10;
 
 function animate() {
   requestAnimationFrame(animate);
 
-  moveDirection.set(0, 0, 0);
-  camera.getWorldDirection(camDirection);
-  camDirection.y = 0;
-  camDirection.normalize();
-  camRight.crossVectors(camDirection, worldUp);
+  if (playerCollisionMesh) {
+    if (keys.w) velocity += ACCELERATION;
+    if (keys.s) velocity -= ACCELERATION;
+    if (keys.a) {
+      player.rotation.z += ROTATION_SPEED;
+      playerCollisionMesh.rotation.y += ROTATION_SPEED;
+      direction.applyAxisAngle(worldUp, ROTATION_SPEED);
+    }
+    if (keys.d) {
+      player.rotation.z -= ROTATION_SPEED;
+      playerCollisionMesh.rotation.y -= ROTATION_SPEED;
+      direction.applyAxisAngle(worldUp, -ROTATION_SPEED);
+    }
+    if (keys[" "]) {
+      player.position.y += VERTICAL_SPEED;
+      playerCollisionMesh.position.y += VERTICAL_SPEED;
+    }
+    if (keys.shift) {
+      player.position.y -= VERTICAL_SPEED;
+      playerCollisionMesh.position.y -= VERTICAL_SPEED;
+    }
+    velocity *= FRICTION;
 
-  if (keys.w) moveDirection.add(camDirection);
-  if (keys.s) moveDirection.sub(camDirection);
-  if (keys.a) moveDirection.sub(camRight);
-  if (keys.d) moveDirection.add(camRight);
-  if (keys[" "]) moveDirection.add(worldUp);
-  if (keys.Shift) moveDirection.sub(worldUp);
-
-  if (moveDirection.x !== 0 || moveDirection.y !== 0 || moveDirection.z !== 0) {
-    moveDirection.normalize();
-    player.position.addScaledVector(moveDirection, MOVE_SPEED);
+    player.position.add(direction.clone().multiplyScalar(velocity));
     playerCollisionMesh.position.copy(player.position);
+
     for (const obstacle of obstacles) {
       toObstacle.subVectors(obstacle.position, playerCollisionMesh.position);
       const distanceSquared = toObstacle.lengthSq();
@@ -287,16 +301,17 @@ function animate() {
         const collision = checkCollision(playerCollisionMesh, obstacle);
         if (collision) {
           if (toObstacle.dot(collision.minAxis) > 0) collision.minAxis.negate();
-          MTV.copy(collision.minAxis).multiplyScalar(collision.minOverlap);
-          player.position.add(MTV);
+          player.position.add(
+            collision.minAxis.multiplyScalar(collision.minOverlap)
+          );
           playerCollisionMesh.position.copy(player.position);
         }
       }
     }
-  }
 
-  controls.target.copy(player.position);
-  controls.update();
+    controls.target.copy(player.position);
+    controls.update();
+  }
 
   renderer.render(scene, camera);
 }
