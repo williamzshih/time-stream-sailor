@@ -1,242 +1,275 @@
-import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
-import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader';
+import * as THREE from "three";
+import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
+import { mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+const camera = new THREE.PerspectiveCamera(
+  75,
+  window.innerWidth / window.innerHeight,
+  0.1,
+  1000
+);
+camera.position.set(0, 5, 10);
 const renderer = new THREE.WebGLRenderer();
 renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.setClearColor(0x87ceeb);
 document.body.appendChild(renderer.domElement);
 const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.minDistance = 5;
+controls.maxDistance = 20;
 
-const pastelBlue = 0xA7C7E7;
-const pastelGreen = 0xC1E1C1;
-const MOVE_SPEED = 0.1;
-const ROTATE_SPEED = 0.1;
-
-const mesh1 = new THREE.Mesh(
-    new THREE.BoxGeometry(1, 1, 1),
-    new THREE.MeshBasicMaterial({ color: pastelBlue })
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(100, 100),
+  new THREE.MeshPhongMaterial({ color: 0x2e8b57 })
 );
-mesh1.position.x = -1;
-scene.add(mesh1);
+ground.rotation.x = -Math.PI / 2;
+ground.position.y = -1;
+ground.receiveShadow = true;
+scene.add(ground);
 
-const mesh2 = new THREE.Mesh(
-    new THREE.BoxGeometry(1, 1, 1),
-    new THREE.MeshBasicMaterial({ color: pastelGreen })
-);
-mesh2.position.x = 1;
-scene.add(mesh2);
+const directionalLight = new THREE.DirectionalLight();
+directionalLight.position.set(10, 10, 10);
+directionalLight.castShadow = true;
+directionalLight.shadow.camera.near = 0.1;
+directionalLight.shadow.camera.far = 1000;
+directionalLight.shadow.camera.right = 10;
+directionalLight.shadow.camera.left = -10;
+directionalLight.shadow.camera.top = 10;
+directionalLight.shadow.camera.bottom = -10;
+scene.add(directionalLight);
 
-camera.position.set(0, 2, 5);
-camera.lookAt(new THREE.Vector3(0, 0, 0))
-
-function createAxis(color, start, end) {
-    const geometry = new THREE.BufferGeometry().setFromPoints([start, end]);
-    const material = new THREE.LineBasicMaterial({ color: color });
-    scene.add(new THREE.Line(geometry, material));
-};
-
-createAxis(0xff0000, new THREE.Vector3(0, 0, 0), new THREE.Vector3(5, 0, 0)); // x-axis
-createAxis(0x00ff00, new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 5, 0)); // y-axis
-createAxis(0x0000ff, new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, 5)); // z-axis
-
-// START OF COLLISION DETECTION
-function getOverlap(projection1, projection2) {
-	return Math.min(
-		projection1.max - projection2.min,
-		projection2.max - projection1.min
-	);
+const obstacles = [];
+for (let i = 0; i < 10; i++) {
+  const obstacle = new THREE.Mesh(
+    // change geometries
+    new THREE.IcosahedronGeometry(1),
+    new THREE.MeshPhongMaterial({
+      color: new THREE.Color().setHSL(Math.random(), 1, 0.5),
+    })
+  );
+  obstacle.castShadow = true;
+  obstacle.receiveShadow = true;
+  obstacle.position.set(Math.random() * 20 - 10, 0, Math.random() * 20 - 10);
+  scene.add(obstacle);
+  obstacles.push(obstacle);
 }
 
-function overlaps(projection1, projection2) {
-    return !(
-        projection1.max <= projection2.min ||
-        projection2.max <= projection1.min
+const loader = new OBJLoader();
+let player = new THREE.Object3D();
+let playerCollisionMesh;
+let other;
+let otherCollisionMesh;
+const tempBoundingBox = new THREE.Box3();
+const tempVector = new THREE.Vector3();
+
+loader.load("boat.obj", (boat) => {
+  boat.scale.set(0.01, 0.01, 0.01);
+
+  // start off rotated later
+
+  boat.traverse((child) => {
+    if (child.isMesh) {
+      child.geometry = mergeVertices(child.geometry);
+      child.material = new THREE.MeshPhongMaterial({ color: 0x8b4513 });
+      child.castShadow = true;
+      child.receiveShadow = true;
+    }
+  });
+
+  player = boat;
+  scene.add(player);
+
+  tempBoundingBox.setFromObject(player).getSize(tempVector);
+  tempVector.multiplyScalar(0.8);
+  // make meshes more accurate later
+  playerCollisionMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(tempVector.x, tempVector.y, tempVector.z)
+  );
+  playerCollisionMesh.visible = false;
+  scene.add(playerCollisionMesh);
+
+  other = boat.clone();
+  other.position.set(Math.random() * 20 - 10, 0, Math.random() * 20 - 10);
+  scene.add(other);
+
+  tempBoundingBox.setFromObject(other).getSize(tempVector);
+  tempVector.multiplyScalar(0.8);
+  // make meshes more accurate later
+  otherCollisionMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(tempVector.x, tempVector.y, tempVector.z)
+  );
+  otherCollisionMesh.visible = false;
+  otherCollisionMesh.position.copy(other.position);
+  scene.add(otherCollisionMesh);
+  obstacles.push(otherCollisionMesh);
+});
+
+// start of SAT collision detection
+
+function getProjection(object, axis) {
+  const vertices = object.geometry.getAttribute("position");
+  let min = Infinity;
+  let max = -Infinity;
+
+  for (let i = 0; i < vertices.count; i++) {
+    tempVector
+      .fromBufferAttribute(vertices, i)
+      .applyMatrix4(object.matrixWorld);
+    const dot = axis.dot(tempVector);
+    min = Math.min(min, dot);
+    max = Math.max(max, dot);
+  }
+
+  return { min, max };
+}
+
+// make more efficient later
+function removeDuplicatesAndNormalize(normals) {
+  const uniqueNormals = [];
+  const EPSILON = 0.000001;
+
+  outer: for (const normal of normals) {
+    for (const uniqueNormal of uniqueNormals) {
+      const dot = Math.abs(normal.dot(uniqueNormal));
+      if (Math.abs(dot - 1) < EPSILON) {
+        continue outer;
+      }
+    }
+    uniqueNormals.push(normal.normalize());
+  }
+
+  return uniqueNormals;
+}
+
+function getNormals(object) {
+  const normalsAttribute = object.geometry.getAttribute("normal");
+  const normals = [];
+
+  for (let i = 0; i < normalsAttribute.count; i++) {
+    tempVector
+      .fromBufferAttribute(normalsAttribute, i)
+      .applyMatrix4(object.matrixWorld.invert().transpose());
+    normals.push(tempVector.clone());
+  }
+
+  return normals;
+}
+
+function checkCollision(object1, object2) {
+  let minOverlap = Infinity;
+  let minAxis;
+
+  for (const axis of removeDuplicatesAndNormalize([
+    ...getNormals(object1),
+    ...getNormals(object2),
+  ])) {
+    const projection1 = getProjection(object1, axis);
+    const projection2 = getProjection(object2, axis);
+
+    if (
+      projection1.max <= projection2.min ||
+      projection2.max <= projection1.min
+    ) {
+      return null;
+    }
+
+    const overlap = Math.min(
+      projection1.max - projection2.min,
+      projection2.max - projection1.min
     );
-}
 
-let vertex = new THREE.Vector3();
-
-function getVertices(mesh) {
-	const positions = mesh.geometry.getAttribute('position');
-	const vertices = [];
-	
-	for (let i = 0; i < positions.count; i++) {
-		vertex.fromBufferAttribute(positions, i);
-		vertex.applyMatrix4(mesh.matrixWorld);
-		vertices.push(vertex.clone());
-	}
-	
-	return vertices;
-}
-
-function project(mesh, axis) {
-	const vertices = getVertices(mesh);
-	
-	let min = Infinity;
-	let max = -Infinity;
-	
-	for (const vertex of vertices) {
-		const dot = axis.dot(vertex);
-		min = Math.min(min, dot);
-		max = Math.max(max, dot); 
-	}
-	
-	return { min, max };
-}
-
-function removeDuplicateNormals(normals) {
-    const uniqueNormals = [];
-    const EPSILON = 0.000001;
-    
-    outer:
-    for (const normal of normals) {
-        for (const uniqueNormal of uniqueNormals) {
-            const dot = Math.abs(normal.dot(uniqueNormal));
-            if (Math.abs(dot - 1) < EPSILON) {
-                continue outer;
-            }
-        }
-        uniqueNormals.push(normal);
+    if (overlap < minOverlap) {
+      minOverlap = overlap;
+      minAxis = axis;
     }
-    
-    return uniqueNormals;
+  }
+
+  return { minAxis, minOverlap };
 }
 
-const p1 = new THREE.Vector3();
-const p2 = new THREE.Vector3();
-const p3 = new THREE.Vector3();
-const edge1 = new THREE.Vector3();
-const edge2 = new THREE.Vector3();
-const normal = new THREE.Vector3();
-
-function getNormals(mesh) {
-    const geometry = mesh.geometry;
-    const positions = geometry.getAttribute('position');
-    const normals = [];
-
-    if (geometry.index) {
-        const indices = geometry.index.array;
-        for (let i = 0; i < indices.length; i += 3) {
-            p1.fromBufferAttribute(positions, indices[i]).applyMatrix4(mesh.matrixWorld);
-            p2.fromBufferAttribute(positions, indices[i + 1]).applyMatrix4(mesh.matrixWorld);
-            p3.fromBufferAttribute(positions, indices[i + 2]).applyMatrix4(mesh.matrixWorld);
-
-            edge1.subVectors(p2, p1);
-            edge2.subVectors(p3, p2);
-            normal.crossVectors(edge1, edge2).normalize();
-            
-            normals.push(normal.clone());
-        }
-    } else {
-        for (let i = 0; i < positions.count; i += 3) {
-            p1.fromBufferAttribute(positions, i).applyMatrix4(mesh.matrixWorld);
-            p2.fromBufferAttribute(positions, i + 1).applyMatrix4(mesh.matrixWorld);
-            p3.fromBufferAttribute(positions, i + 2).applyMatrix4(mesh.matrixWorld);
-
-            edge1.subVectors(p2, p1);
-            edge2.subVectors(p3, p2);
-            normal.crossVectors(edge1, edge2).normalize();
-            
-            normals.push(normal.clone());
-        }
-    }
-    
-    return normals;
-}
-
-function checkCollision(mesh1, mesh2) {
-	const axes = removeDuplicateNormals([...getNormals(mesh1), ...getNormals(mesh2)]);
-
-    let minOverlap = Infinity;
-    let minAxis;
-
-    for (const axis of axes) {
-        const projection1 = project(mesh1, axis);
-        const projection2 = project(mesh2, axis);
-
-        if (!overlaps(projection1, projection2)) {
-            return null;
-        }
-
-        const overlap = getOverlap(projection1, projection2);
-
-        if (overlap < minOverlap) {
-            minOverlap = overlap;
-            minAxis = axis;
-        }
-    }
-
-    return { minAxis, minOverlap };
-}
+// end of SAT collision detection
 
 const keys = {
-    w: false,
-    a: false,
-    s: false,
-    d: false,
-    ' ': false,
-    Shift: false,
-	ArrowUp: false,
-    ArrowLeft: false,
-	ArrowDown: false,
-    ArrowRight: false,
+  w: false,
+  s: false,
+  a: false,
+  d: false,
+  " ": false,
+  Shift: false,
 };
 
-window.addEventListener('keydown', (e) => {
-    if (e.key in keys) {
-        keys[e.key] = true;
-    }
-    if (e.key === 'Shift') {
-        keys.Shift = true;
-    }
+window.addEventListener("keydown", (e) => {
+  if (e.key.toLowerCase() in keys) {
+    keys[e.key.toLowerCase()] = true;
+  } else if (e.key === " ") {
+    keys[" "] = true;
+  } else if (e.key === "Shift") {
+    keys.Shift = true;
+  }
 });
 
-window.addEventListener('keyup', (e) => {
-    if (e.key in keys) {
-        keys[e.key] = false;
-    }
-    if (e.key === 'Shift') {
-        keys.Shift = false;
-    }
+window.addEventListener("keyup", (e) => {
+  if (e.key.toLowerCase() in keys) {
+    keys[e.key.toLowerCase()] = false;
+  } else if (e.key === " ") {
+    keys[" "] = false;
+  } else if (e.key === "Shift") {
+    keys.Shift = false;
+  }
 });
 
-let pushVector = new THREE.Vector3();
-let toObject = new THREE.Vector3();
+const moveDirection = new THREE.Vector3();
+const camDirection = new THREE.Vector3();
+const camRight = new THREE.Vector3();
+const worldUp = new THREE.Vector3(0, 1, 0);
+const toObstacle = new THREE.Vector3();
+const MTV = new THREE.Vector3();
+const MOVE_SPEED = 0.1;
+const COLLISION_CHECK_RADIUS = 10;
 
 function animate() {
-	requestAnimationFrame(animate);
+  requestAnimationFrame(animate);
 
-    if (keys.w) mesh1.position.z -= MOVE_SPEED;
-	if (keys.a) mesh1.position.x -= MOVE_SPEED;
-    if (keys.s) mesh1.position.z += MOVE_SPEED;
-    if (keys.d) mesh1.position.x += MOVE_SPEED;
-    if (keys[' ']) mesh1.position.y += MOVE_SPEED;
-    if (keys.Shift) mesh1.position.y -= MOVE_SPEED;
+  moveDirection.set(0, 0, 0);
+  camera.getWorldDirection(camDirection);
+  camDirection.y = 0;
+  camDirection.normalize();
+  camRight.crossVectors(camDirection, worldUp);
 
-	if (keys.ArrowUp) mesh1.rotation.x -= ROTATE_SPEED;
-    if (keys.ArrowLeft) mesh1.rotation.z += ROTATE_SPEED;
-	if (keys.ArrowDown) mesh1.rotation.x += ROTATE_SPEED;
-    if (keys.ArrowRight) mesh1.rotation.z -= ROTATE_SPEED;
+  if (keys.w) moveDirection.add(camDirection);
+  if (keys.s) moveDirection.sub(camDirection);
+  if (keys.a) moveDirection.sub(camRight);
+  if (keys.d) moveDirection.add(camRight);
+  if (keys[" "]) moveDirection.add(worldUp);
+  if (keys.Shift) moveDirection.sub(worldUp);
 
-	const collision = checkCollision(mesh1, mesh2);
+  if (moveDirection.x !== 0 || moveDirection.y !== 0 || moveDirection.z !== 0) {
+    moveDirection.normalize();
+    player.position.addScaledVector(moveDirection, MOVE_SPEED);
+    playerCollisionMesh.position.copy(player.position);
+    for (const obstacle of obstacles) {
+      toObstacle.subVectors(obstacle.position, playerCollisionMesh.position);
+      const distanceSquared = toObstacle.lengthSq();
 
-	if (collision) {
-		const axis = collision.minAxis;
-        const overlap = collision.minOverlap;
+      if (distanceSquared < COLLISION_CHECK_RADIUS * COLLISION_CHECK_RADIUS) {
+        const collision = checkCollision(playerCollisionMesh, obstacle);
+        if (collision) {
+          if (toObstacle.dot(collision.minAxis) > 0) collision.minAxis.negate();
+          MTV.copy(collision.minAxis).multiplyScalar(collision.minOverlap);
+          player.position.add(MTV);
+          playerCollisionMesh.position.copy(player.position);
+        }
+      }
+    }
+  }
 
-		toObject.subVectors(mesh2.position, mesh1.position);
-		
-		if (axis.dot(toObject) > 0) {
-			axis.negate();
-		}
-		
-		// mesh2.position.sub(pushVector.copy(axis).multiplyScalar(overlap)); // mesh 1 can push mesh 2
-        mesh1.position.add(pushVector.copy(axis).multiplyScalar(0.25 * overlap)); // mesh 2 blocks mesh 1
-	}
+  controls.target.copy(player.position);
+  controls.update();
 
-    renderer.render(scene, camera);
+  renderer.render(scene, camera);
 }
 
 animate();
