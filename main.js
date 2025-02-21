@@ -10,7 +10,7 @@
 import * as THREE from 'three';
 import * as dat from 'dat.gui';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
-import { compute } from 'three/tsl';
+import { compute, step } from 'three/tsl';
 
 // // ---------------
 // const socket = new WebSocket("ws://localhost:9001");
@@ -72,29 +72,39 @@ const phong_material = new THREE.MeshPhongMaterial({
 // --------------------------------------------------------------------------------------------------
 // --------------------------------------------------------------------------------------------------
 // ----------------------------------- SET UP POINTS OF THE FLUID -----------------------------------
+var params = {
+    point_radius: 0.05,
+    point_opacity: 0.7,
+    
+    stiffness: 0.5,
+    viscosity: 400, // unstable for > 500
+    smoothing_radius: 0.1,
+    grav_strength: 3,
+    rest_density_factor: 10, // unstable for < 2
+};
 const num_fluid_points = 500; // number of points in the fluid
 const num_boundary_particles = 150; // number of points on the boundary
 const num_points = num_fluid_points + num_boundary_particles; // number of points in the fluid
-const proportion_of_box_filled = 0.4; // proportion of box filled by fluid without gravity?
+// const params.rest_density_factor = 5; // factor multiplied by <total mass> / <total volume> to get rest density of fluid 
 
 // testing fluid
-const test_view = true; // view for testing purposes
-let point_radius = 0.01; // <= 0.02 good for testing
-let point_opacity = 0.7;
+// const test_view = true; // view for testing purposes
+// let params.point_radius = 0.01; // <= 0.02 good for testing
+// let params.point_opacity = 0.7;
 
-if (test_view == false) {
-    // prettier fluid
-    point_radius = 0.05; // <= 0.02 good for testing
-    point_opacity = 0.2;
-}
+// if (test_view == false) {
+//     // prettier fluid
+//     params.point_radius = 0.05; // <= 0.02 good for testing
+//     params.point_opacity = 0.2;
+// }
 
 // particle properties
 const mass = 1;
 const mass_boundary = 1;
-const stiffness = 0.4;
-const viscosity = 100; // mu in equations -- viscosity of the fluid that resists velocity change
-const smoothing_radius = 0.2;
-const grav_strength = 2.5; // strength of gravity
+// const params.stiffness = 0.4;
+// const params.viscosity = 100; // mu in equations -- params.viscosity of the fluid that resists velocity change
+// const params.smoothing_radius = 0.2;
+// const params.grav_strength = 2.5; // strength of gravity
 const grav_drop_off_strength = 20; // how quickly gravity drops off when near boundary
 const boundary_force_strength = 0.; // strength of boundary force
 const boundary_buffer = 0.05;
@@ -109,15 +119,15 @@ const DAMPING = 0.8;  // Velocity damping factor
 
 // point visualization
 const boundary_point_size = 0.005;
-const fluid_point_geometry = new THREE.SphereGeometry(point_radius);
+const fluid_point_geometry = new THREE.SphereGeometry(params.point_radius);
 const boundary_point_geometry = new THREE.BoxGeometry( boundary_point_size, boundary_point_size, boundary_point_size );
-const fluid_material = new THREE.MeshBasicMaterial({ color: 0x1AA9D0, opacity: point_opacity, transparent: true,});
+const fluid_material = new THREE.MeshBasicMaterial({ color: 0x1AA9D0, opacity: params.point_opacity, transparent: true,});
 const boundary_material = new THREE.MeshBasicMaterial({ color: 0xff0000, opacity: 1, transparent: true,});
 // --------------------------------------------------------------------------------------------------
 // --------------------------------------------------------------------------------------------------
 const total_volume = 1 * 1; // volume of the box
 const volume_per_particle = total_volume / num_fluid_points; // volume per particle
-const rest_density = mass / (volume_per_particle * proportion_of_box_filled); // set rest density of the fluid so that it fills specified size in box
+// const rest_density = params.rest_density_factor * mass / volume_per_particle; // set rest density of the fluid so that it fills specified size in box
 const boundary_density = 0.001; // effective density of boundary used for calculating boundary forces
 
 // visualize the box boundary for fluid
@@ -131,18 +141,36 @@ line.position.set(0.5,0.5,0.5);
 scene.add( line );
 
 
-// // ******************* GUI FOR TESTING VALUES *******************
-// const box_geometry = new THREE.BoxGeometry(1, 1, 1);
-// const box_material = new THREE.MeshPhongMaterial({ color: 0x00ff00});
-// const box_mesh = new THREE.Mesh(box_geometry, box_material);
-// scene.add(box_mesh);
-
-// const gui = new dat.GUI();
-// const cubeFolder = gui.addFolder('Cube');
-// cubeFolder.add(box_mesh.rotation, 'x', 0, Math.PI * 2).name('Rotation X');
-// cubeFolder.open();
 
 
+// ******************* GUI FOR TESTING VALUES *******************
+const gui = new dat.GUI();
+
+// Visualization
+const VisualsFolder = gui.addFolder('Visuals');
+VisualsFolder.add(params, "point_radius", 0.005, 0.1).name('Point Radius').onChange((newRadius) => {
+    fluid_points.forEach((sphere) => {
+        sphere.geometry.dispose(); // Dispose old geometry
+        sphere.geometry = new THREE.SphereGeometry(newRadius); // Create new geometry
+    });
+});
+VisualsFolder.add(fluid_material, "opacity", 0, 1).name('Point Opacity');
+VisualsFolder.open();
+
+// Fluid Properties
+const FluidFolder = gui.addFolder('Fluid Properties');
+FluidFolder.add(params, 'stiffness', 0.05, 1).name('stiffness');
+FluidFolder.add(params, 'viscosity', 0, 500).name('viscosity');
+FluidFolder.add(params, 'smoothing_radius', 0.02, 0.5).name('smoothing_radius');
+FluidFolder.add(params, 'grav_strength', 0, 10).name('grav_strength');
+FluidFolder.add(params, 'rest_density_factor', 2.5, 25).name('Rest Density');
+FluidFolder.open();
+// *********************************************************************************
+
+
+
+
+// *********************************************************************************
 // Instantiate the fluid points
 let fluid_points = Array.from({length: num_fluid_points}, () => new THREE.Mesh(fluid_point_geometry, fluid_material));
 let boundary_points = Array.from({length: num_boundary_particles}, () => new THREE.Mesh(boundary_point_geometry, boundary_material));
@@ -179,13 +207,16 @@ const clock = new THREE.Clock();
 
 
 // ----------------- Variables to track change across frames -----------------
-let density = Array.from({length: num_points}, (v,i) => i < num_fluid_points ? 0 : rest_density); // density of each point
+let density = Array.from({length: num_points}, (v,i) => i < num_fluid_points ? 0 : rest_density()); // density of each point
 let pressure_acceleration = Array.from({length: num_fluid_points}, () => new THREE.Vector3(0,0,0)); // negative gradient of pressure / density, with simple eqn of state p = k * (rho - rho_0)
 let velocity = Array.from({length: num_fluid_points}, () => new THREE.Vector3(0,0,0));
 let mass_array = Array.from({length: num_points}, (v, i) => i < num_fluid_points ? mass : mass_boundary);
 let predicted_positions = Array.from({length: num_fluid_points}, () => new THREE.Vector3(0,0,0));
 
-// Render loop
+
+
+
+// **************************************** Render loop ****************************************
 function animate() {
     renderer.render( scene, camera );
     controls.update();
@@ -203,7 +234,7 @@ function animate() {
     for(let i=0; i<num_fluid_points; i++) {
         // FIRST UPDATE VELOCITY WITH VISCOSITY AND GRAVITY
         const a_grav = compute_gravity_force(fluid_points[i].position.clone()); // GRAVITATIONAL FORCE
-        const a_viscosity = compute_viscosity_force(i); // VISCOSITY FORCE
+        const a_viscosity = compute_viscosity_force(i); // viscosity FORCE
         const a_boundary = compute_boundary_force(fluid_points[i].position.clone()); // BOUNDARY FORCE - try to enforce stronger boundary conditions
 
         const dv0 = a_grav.clone().add(a_viscosity).add(a_boundary).multiplyScalar(dt);
@@ -268,16 +299,20 @@ renderer.setAnimationLoop( animate );
 // ************************** HELPER FUNCTIONS **************************
 // **********************************************************************
 
-const volume = Math.PI * Math.pow(smoothing_radius, 4) / 6; // 2D kernel volume
+const volume = Math.PI * Math.pow(params.smoothing_radius, 4) / 6; // 2D kernel volume
 function kernel2D(dist) {
-    if (dist >= smoothing_radius) { return 0; }
-    return (smoothing_radius - dist) * (smoothing_radius - dist) / volume;
+    if (dist >= params.smoothing_radius) { return 0; }
+    return (params.smoothing_radius - dist) * (params.smoothing_radius - dist) / volume;
 }
 
-const scale = 12 / (Math.pow(smoothing_radius, 4) * Math.PI);
+const scale = 12 / (Math.pow(params.smoothing_radius, 4) * Math.PI);
 function kernel2D_deriv(dist) {
-    if (dist >= smoothing_radius) { return 0; }
-    return (dist - smoothing_radius) * scale;
+    if (dist >= params.smoothing_radius) { return 0; }
+    return (dist - params.smoothing_radius) * scale;
+}
+
+function rest_density() {
+    return params.rest_density_factor * mass / volume_per_particle;
 }
 
 // // density correction factor (one layer boundary) for a specified fluid particle
@@ -305,8 +340,8 @@ function kernel2D_deriv(dist) {
 // turn off gravity at boundary
 function compute_gravity_force(current_position) {
     const norm_pos = current_position.clone().divideScalar(1); // currently box of size 1
-    const y_force = norm_pos.y > 0 ? - grav_strength * ( 1 - Math.exp(-grav_drop_off_strength * (norm_pos.y-0.03)) ) : 0;
-    // const y_force = - grav_strength;
+    const y_force = norm_pos.y > 0 ? - params.grav_strength * ( 1 - Math.exp(-grav_drop_off_strength * (norm_pos.y-0.03)) ) : 0;
+    // const y_force = - params.grav_strength;
     return new THREE.Vector3(0, y_force, 0);
 }
 
@@ -333,9 +368,9 @@ function compute_viscosity_force(particle_index){
         const dist = j_to_i.length();
         const kernel_deriv = kernel2D_deriv( dist );
         const velocity_diff = velocity[particle_index].clone().sub(velocity[j].clone());
-        // viscosity_force.add( velocity_diff.multiplyScalar( 5 * kernel_deriv * mass_array[j] / density[j]) );
+        // params.viscosity_force.add( velocity_diff.multiplyScalar( 5 * kernel_deriv * mass_array[j] / density[j]) );
         // const grad_sq_v = velocity_diff.multiplyScalar(mass_array[j] / density[j] * Math.abs(kernel_deriv / Math.max(dist, min_separation)));
-        viscosity_force.add(velocity_diff.multiplyScalar(- mass_array[j] / density[j] * Math.abs(kernel_deriv / Math.max(dist, min_separation)) * viscosity / density[particle_index]));
+        viscosity_force.add(velocity_diff.multiplyScalar(- mass_array[j] / density[j] * Math.abs(kernel_deriv / Math.max(dist, min_separation)) * params.viscosity / density[particle_index]));
     }
 
     // boundary contribution
@@ -346,7 +381,7 @@ function compute_viscosity_force(particle_index){
         const velocity_diff = velocity[particle_index].clone(); // boundary point stationary
         // viscosity_force.add( velocity_diff.multiplyScalar( 5 * kernel_deriv * mass_array[j] / density[j]) );
         // const grad_sq_v = velocity_diff.multiplyScalar(mass_array[j] / density[j] * Math.abs(kernel_deriv / Math.max(dist, min_separation)));
-        viscosity_force.add(velocity_diff.multiplyScalar(- mass_array[j] / density[j] * Math.abs(kernel_deriv / Math.max(dist, min_separation)) * viscosity / density[particle_index]));
+        viscosity_force.add(velocity_diff.multiplyScalar(- mass_array[j] / density[j] * Math.abs(kernel_deriv / Math.max(dist, min_separation)) * params.viscosity / density[particle_index]));
     }
     return viscosity_force;
 }
@@ -354,9 +389,10 @@ function compute_viscosity_force(particle_index){
 
 // ********** COMPUTE DENSITY -- density computed for FLUID points only (boundary set to rest density) **********
 function compute_density(fluid_positions_arg) {
+    const density_at_rest = rest_density()
     // compute FLUID density rho_i at point x_i due to all points
     for(let i=0; i<num_fluid_points; i++) {
-        density[i] = rest_density; // ** VERY IMPORTANT ** -- reset density to REST density of fluid before computing
+        density[i] = density_at_rest; // ** VERY IMPORTANT ** -- reset density to REST density of fluid before computing
 
         // density correction factor for this specific fluid particle to account for one layer of boundary particles
         // const boundary_correction_factor = density_correction_factor(i); // seems to be causing instability
@@ -383,7 +419,7 @@ function compute_density(fluid_positions_arg) {
 
 
         if (clamp_density == true) {
-            density[i] = Math.max(density[i], rest_density); // help the particle deficiency problem at free surface
+            density[i] = Math.max(density[i], density_at_rest); // help the particle deficiency problem at free surface
         }
         // // Protect against too low density - does not help with stability
         // const min_density = rest_density * 0.1;
@@ -405,9 +441,9 @@ function compute_pressure_acceleration(i) {
         const dist = j_to_i.length();
         const kernel_deriv = kernel2D_deriv( dist );
 
-        const pressure_acc = j_to_i.multiplyScalar(- stiffness * kernel_deriv / Math.max(dist, min_separation) * mass_array[j] * (1/density[i] + 1/density[j]));
+        const pressure_acc = j_to_i.multiplyScalar(- params.stiffness * kernel_deriv / Math.max(dist, min_separation) * mass_array[j] * (1/density[i] + 1/density[j]));
 
-        // pressure_acceleration[i].add( - stiffness * grad_kernel * mass * (1/density[i] + 1/density[j]));
+        // pressure_acceleration[i].add( - params.stiffness * grad_kernel * mass * (1/density[i] + 1/density[j]));
         pressure_acceleration[i].add( pressure_acc );
         // pressure_acceleration[i].set(0,0.01,0);
     }
@@ -418,9 +454,9 @@ function compute_pressure_acceleration(i) {
         const dist = j_to_i.length();
         const kernel_deriv = kernel2D_deriv( dist );
 
-        const pressure_acc = j_to_i.multiplyScalar(- stiffness * kernel_deriv / Math.max(dist, min_separation) * mass_boundary * (2/density[i])); // approximate boundary with same density as fluid near boundary
+        const pressure_acc = j_to_i.multiplyScalar(- params.stiffness * kernel_deriv / Math.max(dist, min_separation) * mass_boundary * (2/density[i])); // approximate boundary with same density as fluid near boundary
 
-        // pressure_acceleration[i].add( - stiffness * grad_kernel * mass * (1/density[i] + 1/density[j]));
+        // pressure_acceleration[i].add( - params.stiffness * grad_kernel * mass * (1/density[i] + 1/density[j]));
         pressure_acceleration[i].add( pressure_acc );
         // pressure_acceleration[i].set(0,0.01,0);
     }
