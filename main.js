@@ -1,24 +1,31 @@
-// SETUP:
-//  npm install --save three    
-//  npm install --save-dev vite  
+// **********************************************************************************************
+// *************************************** TERMINAL SETUP ***************************************
+// **********************************************************************************************
+//          npm install --save three    
+//          npm install --save-dev vite  
 
-// npm install dat.gui --save-dev
-// npm install @types/dat.gui --save-dev
+// GUI
+//      npm install dat.gui --save-dev
+//      npm install @types/dat.gui --save-dev
 
-//  npx vite
+// FPS COUNTER
+//      npm install --save stats.js
 
+// START UP HTML PAGE
+//      npx vite
+// **********************************************************************************************
+
+
+
+// ************************************************************************************************
+// ********************************** SCENE SETUP + DEPENDENCIES **********************************
+// ************************************************************************************************
+// DEPENDENCIES
 import * as THREE from 'three';
-import * as dat from 'dat.gui';
+import * as dat from 'dat.gui'; // GUI
+import Stats from 'stats.js'; // FPS counter
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
-import { compute, step } from 'three/tsl';
-
-// // ---------------
-// const socket = new WebSocket("ws://localhost:9001");
-// socket.binaryType = "arraybuffer";  // Expect binary data
-
-// let particles = [];
-// const NUM_PARTICLES = 100;
-// // ---------------
+// import { compute, step } from 'three/tsl';
 
 
 const scene = new THREE.Scene();
@@ -29,6 +36,11 @@ const camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.inner
 const renderer = new THREE.WebGLRenderer();
 renderer.setSize( window.innerWidth, window.innerHeight );
 document.body.appendChild( renderer.domElement );
+
+// ADD FPS COUNTER
+const stats = new Stats();
+stats.showPanel(0);
+document.body.appendChild(stats.dom);
 
 const controls = new OrbitControls(camera, renderer.domElement);
 // camera.position.set(1.5, 1.5, 1.5);
@@ -67,87 +79,88 @@ const phong_material = new THREE.MeshPhongMaterial({
     color: 0x00ff00, // Green color
     shininess: 100   // Shininess of the material
 });
+// **************************************************************************************************
 
 
-// --------------------------------------------------------------------------------------------------
-// --------------------------------------------------------------------------------------------------
-// ----------------------------------- SET UP POINTS OF THE FLUID -----------------------------------
+
+// **************************************************************************************************
+// *********************************** SET UP FLUID AND BOUNDARY ************************************
+// **************************************************************************************************
+// PARAMETERS CONTROLLABLE IN GUI
 var params = {
-    point_radius: 0.05,
+    // FLUID VISULIZATION
+    point_radius: 0.01, // 0.05 nice visually
     point_opacity: 0.7,
-    
+
+    // BOUNDARY VISUALIZATION
+    boundary_point_size: 0.01,
+    boundary_point_opacity: 1,
+    boundary_box_width: 1,
+
+    // FLUID PROPERTIES    
     stiffness: 0.5,
-    viscosity: 400, // unstable for > 500
-    smoothing_radius: 0.1,
+    viscosity: 400,             // unstable for > 500 --- mu in equations, viscosity of the fluid that resists velocity change
+    smoothing_radius: 0.1,      // <= 0.1 nicer looking
     grav_strength: 3,
-    rest_density_factor: 10, // unstable for < 2
+    rest_density_factor: 10,    // unstable for < 2
 };
-const num_fluid_points = 500; // number of points in the fluid
+
+// NUMBER OF POINTS
+const num_fluid_points = 400; // number of points in the fluid // ***** NOTE >30 FPS when <510 fluid points with no algorithmic acceleration
 const num_boundary_particles = 150; // number of points on the boundary
 const num_points = num_fluid_points + num_boundary_particles; // number of points in the fluid
-// const params.rest_density_factor = 5; // factor multiplied by <total mass> / <total volume> to get rest density of fluid 
 
-// testing fluid
-// const test_view = true; // view for testing purposes
-// let params.point_radius = 0.01; // <= 0.02 good for testing
-// let params.point_opacity = 0.7;
-
-// if (test_view == false) {
-//     // prettier fluid
-//     params.point_radius = 0.05; // <= 0.02 good for testing
-//     params.point_opacity = 0.2;
-// }
-
-// particle properties
+// PARTICLE PROPERTIES (NON-GUI)
 const mass = 1;
 const mass_boundary = 1;
-// const params.stiffness = 0.4;
-// const params.viscosity = 100; // mu in equations -- params.viscosity of the fluid that resists velocity change
-// const params.smoothing_radius = 0.2;
-// const params.grav_strength = 2.5; // strength of gravity
 const grav_drop_off_strength = 20; // how quickly gravity drops off when near boundary
-const boundary_force_strength = 0.; // strength of boundary force
 const boundary_buffer = 0.05;
 const clamp_density = true; // aids in issue of density near free surface by ensuring minimum density at all points
+// const boundary_force_strength = 0.; // strength of boundary force
 
-// stability controls
+// STABILITY CONTROLS (NON-GUI)
 const min_separation = 0.00005; // ** VERY IMPORTANT - minimum separation between particles to prevent division by zero
 const max_time_step = 1/60; // maximum time step for physics
 const max_velocity = 3; // maximum velocity of fluid points for numerical stability
-const BUFFER = 0.001; // Small buffer to prevent sticking
+const BUFFER = 0.001; // Small buffer to prevent sticking to boundaries
 const DAMPING = 0.8;  // Velocity damping factor
 
-// point visualization
-const boundary_point_size = 0.005;
+// POINT VISUALIZATION
 const fluid_point_geometry = new THREE.SphereGeometry(params.point_radius);
-const boundary_point_geometry = new THREE.BoxGeometry( boundary_point_size, boundary_point_size, boundary_point_size );
+const boundary_point_geometry = new THREE.BoxGeometry( params.boundary_point_size, params.boundary_point_size, params.boundary_point_size );
 const fluid_material = new THREE.MeshBasicMaterial({ color: 0x1AA9D0, opacity: params.point_opacity, transparent: true,});
-const boundary_material = new THREE.MeshBasicMaterial({ color: 0xff0000, opacity: 1, transparent: true,});
-// --------------------------------------------------------------------------------------------------
-// --------------------------------------------------------------------------------------------------
+const boundary_material = new THREE.MeshBasicMaterial({ color: 0x00ff00, opacity: params.boundary_point_opacity, transparent: true,});
+
+const test_material = new THREE.MeshBasicMaterial({ color: 0xff0000, opacity: params.point_opacity, transparent: true,});
+const neighbor_material = new THREE.MeshBasicMaterial({ color: 0xffff00, opacity: params.point_opacity, transparent: true,});
+
+// OTHER CONSTANTS
 const total_volume = 1 * 1; // volume of the box
 const volume_per_particle = total_volume / num_fluid_points; // volume per particle
 // const rest_density = params.rest_density_factor * mass / volume_per_particle; // set rest density of the fluid so that it fills specified size in box
-const boundary_density = 0.001; // effective density of boundary used for calculating boundary forces
+// const boundary_density = 0.001; // effective density of boundary used for calculating boundary forces
 
-// visualize the box boundary for fluid
-const geometry = new THREE.BoxGeometry( 1, 1, 1 );
-const wireframe = new THREE.WireframeGeometry( geometry );
-const line = new THREE.LineSegments( wireframe );
+// SET UP BOUNDARY
+let boundary_geometry = new THREE.BoxGeometry( params.boundary_box_width, 1, 1 );
+let boundary_wireframe = new THREE.WireframeGeometry( boundary_geometry );
+const line = new THREE.LineSegments( boundary_wireframe );
 line.material.depthTest = false;
 line.material.opacity = 0.5;
 line.material.transparent = true;
-line.position.set(0.5,0.5,0.5);
+line.position.set(params.boundary_box_width / 2,0.5,0.5);
 scene.add( line );
+// **************************************************************************************************
 
 
 
 
-// ******************* GUI FOR TESTING VALUES *******************
+// ************************************************************************************
+// ****************************** GUI FOR TESTING VALUES ******************************
+// ************************************************************************************
 const gui = new dat.GUI();
 
-// Visualization
-const VisualsFolder = gui.addFolder('Visuals');
+// POINT VISUALIZATION
+const VisualsFolder = gui.addFolder('Fluid Visuals');
 VisualsFolder.add(params, "point_radius", 0.005, 0.1).name('Point Radius').onChange((newRadius) => {
     fluid_points.forEach((sphere) => {
         sphere.geometry.dispose(); // Dispose old geometry
@@ -157,7 +170,28 @@ VisualsFolder.add(params, "point_radius", 0.005, 0.1).name('Point Radius').onCha
 VisualsFolder.add(fluid_material, "opacity", 0, 1).name('Point Opacity');
 VisualsFolder.open();
 
-// Fluid Properties
+
+// BOUNDARY VISUALIZATION
+const BoundaryFolder = gui.addFolder('Boundaries');
+BoundaryFolder.add(params, "boundary_box_width", 0.1, 1).name('Box Width').onChange((newSize) => { // initialize at max in GUI as I don't want to update hashing declaration yet
+    line.geometry.dispose();
+    boundary_geometry = new THREE.BoxGeometry(newSize, 1, 1);
+    boundary_wireframe = new THREE.WireframeGeometry(boundary_geometry);
+    line.geometry = boundary_wireframe;
+    line.position.set(newSize / 2, 0.5, 0.5);
+    set_up_boundary_points(num_points_per_side);
+});
+BoundaryFolder.add(params, "boundary_point_size", 0.001, 0.05).name('Point Size').onChange((newSize) => {
+    boundary_points.forEach((boundary_box) => {
+        boundary_box.geometry.dispose(); // Dispose old geometry
+        boundary_box.geometry = new THREE.BoxGeometry(newSize, newSize, newSize); // Create new geometry
+    });
+});
+BoundaryFolder.add(boundary_material, "opacity", 0, 1).name('Point Opacity');
+BoundaryFolder.open();
+
+
+// FLUID PROPERTIES
 const FluidFolder = gui.addFolder('Fluid Properties');
 FluidFolder.add(params, 'stiffness', 0.05, 1).name('stiffness');
 FluidFolder.add(params, 'viscosity', 0, 500).name('viscosity');
@@ -171,60 +205,80 @@ FluidFolder.open();
 
 
 // *********************************************************************************
-// Instantiate the fluid points
+// INSTANTIATE THE POINTS
 let fluid_points = Array.from({length: num_fluid_points}, () => new THREE.Mesh(fluid_point_geometry, fluid_material));
 let boundary_points = Array.from({length: num_boundary_particles}, () => new THREE.Mesh(boundary_point_geometry, boundary_material));
-// let all_points = fluid_points.concat(boundary_points);
 
-// initialize positions and add to scene
+// INITIALIZE FLUID AND ADD TO SCENE
 for(let i=0; i<num_fluid_points; i++) {
     fluid_points[i].position.set(Math.random()*0.3 + 0.6, Math.random()*0.4 + 0.2, 0); // Set position to random in box (0,0,0) - (1,1,1)
 	scene.add(fluid_points[i]);
 }
+
+// INITIALIZE BOUNDARY POINTS AND ADD TO SCENE
 const num_points_per_side = num_boundary_particles / 3;
-for (let i = 0; i < num_boundary_particles; i++) {
-
-    // y = 0 boundary
-    if (i >= 0 && i < num_points_per_side) {
-        boundary_points[i].position.set((i % num_points_per_side / num_points_per_side), -boundary_buffer, 0);
-    } 
-    // x = 1 boundary 
-    else if (i >= num_points_per_side && i < 2 * num_points_per_side) {
-        boundary_points[i].position.set(1 + boundary_buffer, i % num_points_per_side / num_points_per_side, 0);
-    } 
-    // x = 0 boundary
-    else if (i >= 2 * num_points_per_side && i < 3 * num_points_per_side) { 
-        boundary_points[i].position.set(-boundary_buffer, 1 - i % num_points_per_side / num_points_per_side, 0);
-    }
-    scene.add(boundary_points[i]);
-
-}
+set_up_boundary_points(num_points_per_side, true)
 
 
+// **************************************************************************************************
+// *********************************** GLOBAL VARIABLES TO UPDATE ***********************************
+// **************************************************************************************************
+// TIME
 let animation_time = 0;
 let dt;
 const clock = new THREE.Clock();
 
-
-// ----------------- Variables to track change across frames -----------------
+// ARRAYS
 let density = Array.from({length: num_points}, (v,i) => i < num_fluid_points ? 0 : rest_density()); // density of each point
 let pressure_acceleration = Array.from({length: num_fluid_points}, () => new THREE.Vector3(0,0,0)); // negative gradient of pressure / density, with simple eqn of state p = k * (rho - rho_0)
 let velocity = Array.from({length: num_fluid_points}, () => new THREE.Vector3(0,0,0));
 let mass_array = Array.from({length: num_points}, (v, i) => i < num_fluid_points ? mass : mass_boundary);
 let predicted_positions = Array.from({length: num_fluid_points}, () => new THREE.Vector3(0,0,0));
 
+let spatial_lookup = Array.from({length: num_fluid_points}, () => [0,0]); // entries are [particle_index, cell_key]
+const maxInt = Number.MAX_SAFE_INTEGER;
+let start_indices = Array.from({length: num_fluid_points}, () => maxInt); // entry i (particle index) indicates where corresponding cell begins indexing in spatial_lookup
+// **************************************************************************************************
 
 
 
-// **************************************** Render loop ****************************************
+
+// *********************************************************************************************
+// **************************************** RENDER LOOP ****************************************
+// *********************************************************************************************
 function animate() {
+    stats.begin(); // FPS counter
     renderer.render( scene, camera );
+    stats.end(); // FPS counter
     controls.update();
 
     // update time and delta_t
     // dt = clock.getDelta(); // get time since last frame
     dt = Math.min(clock.getDelta(), max_time_step); // make sure physics time step is sufficiently small
     animation_time += dt; 
+
+
+    // ----------------------------------------------- just see if this runs
+    // Update the spatial_lookup array
+    update_spatial_lookup();
+    const test_ind = 0;
+    // try to change color of the test particle
+    // first make all same color, then modify
+    for (let i=0; i<num_fluid_points; i++){
+        fluid_points[i].material = fluid_material;
+    }
+    
+    const test_point = fluid_points[test_ind].position.clone();
+    // get_neighbor_indices(test_point);
+    const neighbor_inds = get_neighbor_indices(test_point);
+    for (let i=0; i<neighbor_inds.length; i++){
+        const neighbor_idx = neighbor_inds[i];
+        fluid_points[neighbor_idx].material = neighbor_material;
+    }
+
+    // make test point red
+    fluid_points[test_ind].material = test_material;
+    // ----------------------------------------------- 
 
     const current_positions = fluid_points.map(p => p.position.clone());
     // i've seen computing density with predicted positions can be unstable
@@ -235,9 +289,9 @@ function animate() {
         // FIRST UPDATE VELOCITY WITH VISCOSITY AND GRAVITY
         const a_grav = compute_gravity_force(fluid_points[i].position.clone()); // GRAVITATIONAL FORCE
         const a_viscosity = compute_viscosity_force(i); // viscosity FORCE
-        const a_boundary = compute_boundary_force(fluid_points[i].position.clone()); // BOUNDARY FORCE - try to enforce stronger boundary conditions
+        // const a_boundary = compute_boundary_force(fluid_points[i].position.clone()); // BOUNDARY FORCE - try to enforce stronger boundary conditions
 
-        const dv0 = a_grav.clone().add(a_viscosity).add(a_boundary).multiplyScalar(dt);
+        const dv0 = a_grav.clone().add(a_viscosity).multiplyScalar(dt); // .add(a_boundary)
         velocity[i].add( dv0 );
         velocity[i] = clamp_velocity(velocity[i]);
         predicted_positions[i] = fluid_points[i].position.clone().add( velocity[i].clone().multiplyScalar(dt) );
@@ -270,8 +324,11 @@ function animate() {
     // current_positions = updated_positions;
 }
 renderer.setAnimationLoop( animate );
+// **************************************************************************************************
 
 
+
+// **************************************************************************************************
 // // event variable
 // let still = false;
 // let full_cubes_visible = true;
@@ -290,14 +347,15 @@ renderer.setAnimationLoop( animate );
 //             console.log(`Key ${event.key} pressed`);
 //     }
 // }
+// **************************************************************************************************
 
 
 
 
 
-// **********************************************************************
-// ************************** HELPER FUNCTIONS **************************
-// **********************************************************************
+// **************************************************************************************************
+// **************************************** HELPER FUNCTIONS ****************************************
+// **************************************************************************************************
 
 const volume = Math.PI * Math.pow(params.smoothing_radius, 4) / 6; // 2D kernel volume
 function kernel2D(dist) {
@@ -345,15 +403,15 @@ function compute_gravity_force(current_position) {
     return new THREE.Vector3(0, y_force, 0);
 }
 
-// function to compute boundary force
-function compute_boundary_force(current_position) {
-    const norm_pos = current_position.clone().divideScalar(1); // currently box of size 1
-    // const x_force = 1 / ( Math.sin(Math.PI * norm_pos.x)**2 * Math.tan(Math.PI * norm_pos.x) );
-    // const y_force = 1 / ( Math.sin(Math.PI * norm_pos.y)**2 * Math.tan(Math.PI * norm_pos.y) );
-    const x_force = -Math.sinh(10 * (norm_pos.x - 0.5));
-    const y_force = -Math.sinh(10 * (norm_pos.y - 0.5));
-    return new THREE.Vector3(x_force, y_force, 0).multiplyScalar(boundary_force_strength / mass);
-}
+// // function to compute boundary force
+// function compute_boundary_force(current_position) {
+//     const norm_pos = current_position.clone().divideScalar(1); // currently box of size 1
+//     // const x_force = 1 / ( Math.sin(Math.PI * norm_pos.x)**2 * Math.tan(Math.PI * norm_pos.x) );
+//     // const y_force = 1 / ( Math.sin(Math.PI * norm_pos.y)**2 * Math.tan(Math.PI * norm_pos.y) );
+//     const x_force = -Math.sinh(10 * (norm_pos.x - 0.5));
+//     const y_force = -Math.sinh(10 * (norm_pos.y - 0.5));
+//     return new THREE.Vector3(x_force, y_force, 0).multiplyScalar(boundary_force_strength / mass);
+// }
 
 function compute_viscosity_force(particle_index){
     let viscosity_force = new THREE.Vector3(0,0,0);
@@ -481,46 +539,177 @@ function validateParticlePosition(position, i) {
 
 
 function handleBoundaryCollisions(i) {
+    // x = 0
     if (fluid_points[i].position.x < 0 + BUFFER) {
         fluid_points[i].position.x = 0 + BUFFER;
         // all_points[i].position.x = 0 + BUFFER;
         velocity[i].x = Math.abs(velocity[i].x) * DAMPING;
     }
-    if (fluid_points[i].position.x > 1 - BUFFER) {
-        fluid_points[i].position.x = 1 - BUFFER;
+    // x = boundary_box_width
+    if (fluid_points[i].position.x > params.boundary_box_width - BUFFER) {
+        fluid_points[i].position.x = params.boundary_box_width - BUFFER;
         // all_points[i].position.x = 1 - BUFFER;
         velocity[i].x = -Math.abs(velocity[i].x) * DAMPING;
     }
+    // y = 1
     if (fluid_points[i].position.y > 1 - BUFFER) {
         fluid_points[i].position.y = 1 - BUFFER;
         // all_points[i].position.y = 1 - BUFFER;
         velocity[i].y = -Math.abs(velocity[i].y) * DAMPING;
     }
+    // y = 0
     if(fluid_points[i].position.y < 0 + BUFFER) {
         fluid_points[i].position.y = 0 + BUFFER;
         // all_points[i].position.y = 0 + BUFFER;
         velocity[i].y = Math.abs(velocity[i].y) * DAMPING;
     }
+}
 
-    // // REVERSE VELOCITY IF POINTS HIT BOUNDARY
-    // if (fluid_points[i].position.x < 0) {
-    //     fluid_points[i].position.x = 0.;
-    //     all_points[i].position.x = 0.;
-    //     velocity[i].x *= -boundary_collision_elasticity;
+function set_up_boundary_points(num_points_per_side, add_to_scene = false){
+    const width = params.boundary_box_width + 2 * boundary_buffer;
+    const z_height = 1 + 2 * boundary_buffer;
+    for (let i = 0; i < num_boundary_particles; i++) {
+        // y = 0 boundary
+        if (i >= 0 && i < num_points_per_side) {
+            boundary_points[i].position.set((i % num_points_per_side / num_points_per_side) * width - boundary_buffer, -boundary_buffer, 0);
+        } 
+        // x = params.boundary_box_width boundary 
+        else if (i >= num_points_per_side && i < 2 * num_points_per_side) {
+            boundary_points[i].position.set(params.boundary_box_width + boundary_buffer, (i % num_points_per_side / num_points_per_side) * z_height - boundary_buffer, 0);
+        } 
+        // x = 0 boundary
+        else if (i >= 2 * num_points_per_side && i < 3 * num_points_per_side) { 
+            boundary_points[i].position.set(-boundary_buffer, (i % num_points_per_side / num_points_per_side) * z_height - boundary_buffer, 0);
+        }
+        if (add_to_scene == true) {
+            scene.add(boundary_points[i]);
+        }
+    }
+}
+
+
+// ******************************** EFFICIENT NEIGHBOR SEARCH FUNCTIONS ************************************
+// convert 3D position of point to integer coordinate of cell point lies in
+function position_to_cell_coord(point) {
+    const x_cell_coord = Math.floor(point.x / params.smoothing_radius);
+    const y_cell_coord = Math.floor(point.y / params.smoothing_radius);
+    const z_cell_coord = Math.floor(point.z / params.smoothing_radius);
+
+    return [x_cell_coord, y_cell_coord, z_cell_coord];
+}
+
+// Hash the cell's integer coordinates into a large (likely unique) number
+function hash_cell_coord(cell_coord_array){
+    const x_scaled = cell_coord_array[0] * 73856093;
+    const y_scaled = cell_coord_array[1] * 19349663;
+    const z_scaled = cell_coord_array[2] * 83492791;
+
+    return x_scaled + y_scaled + z_scaled;
+}
+
+// use hash value to index the spatial lookup array
+function get_LU_key_from_hash(hash_value) {
+    return hash_value % num_fluid_points; // spatial_lookup.length() = num_fluid_points
+}
+
+function update_spatial_lookup() {
+    // identify each particle with its cell in the spatial lookup array
+    for (let particle_index=0; particle_index < num_fluid_points; particle_index++) {
+        const hash_value = hash_cell_coord( position_to_cell_coord( fluid_points[particle_index].position.clone() ) );
+        const cell_key = get_LU_key_from_hash(hash_value);
+        spatial_lookup[particle_index] = [particle_index, cell_key];
+        start_indices[particle_index] = maxInt; // reset the start index before sorting
+    }
+
+    // sort the spatial_lookup array by cell_key
+    spatial_lookup = spatial_lookup.sort((a,b) => a[1] - b[1]);
+
+    // determine start index in spatial lookup of each unique cell key
+    for (let i=0; i < num_fluid_points; i++) {
+        const curr_key = spatial_lookup[i][1];
+        const prev_key = i == 0 ? maxInt : spatial_lookup[i-1][1];
+        if (curr_key != prev_key) {
+            start_indices[curr_key] = i;
+        }
+    }
+
+}
+
+function addArrays(arr1, arr2) {
+    const result = [];
+    for (let i = 0; i < arr1.length; i++) {
+        result.push(arr1[i] + arr2[i]);
+    }
+    return result;
+}
+
+const offsets = [-1, 0, 1];
+function get_neighbor_indices(sample_point) {
+    let neighbor_indices = [];
+    const rSq = params.smoothing_radius ** 2;
+
+    for (let di = -1; di <= 1; di++) {
+        for (let dj = -1; dj <= 1; dj++) {
+            for (let dk = -1; dk <= 1; dk++) {
+                // find cell of sample point
+                const sample_cell_coords = addArrays(position_to_cell_coord(sample_point), [di, dj, dk]);
+                const cell_key = get_LU_key_from_hash( hash_cell_coord(sample_cell_coords));
+
+                const start_ind = start_indices[cell_key];
+                for(let lookup_ind = start_ind; lookup_ind < num_fluid_points; lookup_ind++){
+                    // ensure only looking at cell with particle and its neighbors
+                    if (spatial_lookup[lookup_ind][1] != cell_key) { break; }
+
+                    // check particle is within smoothing radius
+                    const particle_ind = spatial_lookup[lookup_ind][0];
+                    const distSq = fluid_points[particle_ind].position.clone().sub(sample_point).lengthSq();
+                    if (distSq <= rSq) {
+                        neighbor_indices.push(particle_ind);
+                    }
+                    // neighbor_indices.push(spatial_lookup[lookup_ind][0]); // this is a particle index
+                }
+            }
+        }
+    }
+
+    // this works!
+    // // find cell of sample point
+    // const sample_cell_coords = position_to_cell_coord(sample_point);
+    // const cell_key = get_LU_key_from_hash( hash_cell_coord(sample_cell_coords));
+
+    // const start_ind = start_indices[cell_key];
+    // for(let lookup_ind = start_ind; lookup_ind < num_fluid_points; lookup_ind++){
+    //     if (spatial_lookup[lookup_ind][1] != cell_key) { break; }
+    //     neighbor_indices.push(spatial_lookup[lookup_ind][0]); // this is a particle index
     // }
-    // if (fluid_points[i].position.x > 1) {
-    //     fluid_points[i].position.x = 1;
-    //     all_points[i].position.x = 1;
-    //     velocity[i].x *= -boundary_collision_elasticity;
+
+
+
+
+    // // look through sample point cell and all its neighbors
+    // for (let i=0; i<3; i++){
+    //     for (let j=0; j<3; j++){
+    //         for (let k=0; k<3; k++){
+    //             const curr_cell_coords = sample_cell_coords + [offsets[i], offsets[j], offsets[k]];
+
+    //             // get key of current cell and look at all points with that key
+    //             const curr_cell_key = get_LU_key_from_hash( hash_cell_coord(curr_cell_coords) );
+    //             const cell_start_ind = start_indices[curr_cell_key];
+
+    //             for (let lookup_ind = cell_start_ind; lookup_ind < num_fluid_points; lookup_ind++){
+    //                 // exit loop if not looking at correct key
+    //                 if (spatial_lookup[lookup_ind][1] != curr_cell_key) { break; }
+
+    //                 // particle within smoothing radius
+    //                 const particle_ind = spatial_lookup[lookup_ind][0];
+    //                 const distSq = fluid_points[particle_ind].position.clone().sub(sample_point).lengthSq();
+    //                 if (distSq <= rSq) {
+    //                     neighbor_indices.push(particle_ind);
+    //                 }
+    //             }
+    //         }
+    //     }
     // }
-    // if (fluid_points[i].position.y > 1) {
-    //     fluid_points[i].position.y = 1;
-    //     all_points[i].position.y = 1;
-    //     velocity[i].y *= -boundary_collision_elasticity;
-    // }
-    // if(fluid_points[i].position.y < 0) {
-    //     fluid_points[i].position.y = 0;
-    //     all_points[i].position.y = 0;
-    //     velocity[i].y *= -boundary_collision_elasticity;
-    // }
+
+    return neighbor_indices;
 }
