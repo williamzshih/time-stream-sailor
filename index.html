@@ -1,27 +1,23 @@
 <!DOCTYPE html>
 <html lang="en">
-	<head>
-		<meta charset="utf-8">
-		<title>Assignment1</title>
-		<style>
-			body { margin: 0; }
-		</style>
-	</head>
-	<body>
-		<script>
-			const path = window.location.pathname;
-			let scriptSrc = '/src/main.js';
-
-			if (path === '/boat') {
-				scriptSrc = '/src/boat.js';
-			} else if (path === '/collision') {
-				scriptSrc = '/src/collision.js';
-			}
-
-			const script = document.createElement('script');
-			script.type = 'module';
-			script.src = scriptSrc;
-			document.body.appendChild(script);
-		</script>
-	</body>
+  <head>
+    <meta charset="utf-8" />
+    <title>CS 174A Project</title>
+    <style>
+      body {
+        margin: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <script>
+      const path = window.location.pathname;
+      let scriptSrc =
+        path === "/" || path === "/main" ? "/src/main.js" : "/src/collision.js";
+      const script = document.createElement("script");
+      script.type = "module";
+      script.src = scriptSrc;
+      document.body.appendChild(script);
+    </script>
+  </body>
 </html>

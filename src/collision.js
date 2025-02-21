@@ -22,7 +22,7 @@ controls.minDistance = 5;
 controls.maxDistance = 20;
 
 const ground = new THREE.Mesh(
-  new THREE.PlaneGeometry(100, 100),
+  new THREE.PlaneGeometry(1000, 1000),
   new THREE.MeshPhongMaterial({ color: 0x2e8b57 })
 );
 ground.rotation.x = -Math.PI / 2;
@@ -89,38 +89,53 @@ for (let i = 0; i < 10; i++) {
 const loader = new OBJLoader();
 let player = new THREE.Object3D();
 let playerCollisionMesh;
-let other;
-let otherCollisionMesh;
-const tempBoundingBox = new THREE.Box3();
-const tempVector = new THREE.Vector3();
 
-loader.load("boat.obj", (boat) => {
-  boat.scale.set(0.01, 0.01, 0.01);
-  boat.rotation.x = -Math.PI / 2;
-  boat.rotation.z = Math.PI / 2;
+function loadObj({
+  file,
+  bbDimensions,
+  bbOffset = new THREE.Vector3(),
+  position = new THREE.Vector3(),
+  scale = new THREE.Vector3(1, 1, 1),
+  rotation = new THREE.Euler(),
+  color = new THREE.Color(),
+  visible = false,
+  isPlayer = false,
+}) {
+  loader.load(file, (object) => {
+    object.position.copy(position);
+    object.scale.copy(scale);
+    object.rotation.copy(rotation);
 
-  boat.traverse((child) => {
-    if (child.isMesh) {
-      child.geometry = mergeVertices(child.geometry);
-      child.material = new THREE.MeshPhongMaterial({ color: 0x8b4513 });
-      child.castShadow = true;
-      child.receiveShadow = true;
+    object.traverse((child) => {
+      if (child.isMesh) {
+        child.geometry = mergeVertices(child.geometry);
+        child.material = new THREE.MeshPhongMaterial({ color });
+        child.castShadow = true;
+        child.receiveShadow = true;
+      }
+    });
+
+    const collisionMesh = new THREE.Mesh(
+      new THREE.BoxGeometry(bbDimensions.x, bbDimensions.y, bbDimensions.z),
+      new THREE.MeshBasicMaterial({ wireframe: true })
+    );
+    collisionMesh.visible = visible;
+    collisionMesh.position.copy(position).add(bbOffset);
+
+    if (isPlayer) {
+      player = object;
+      playerCollisionMesh = collisionMesh;
+      scene.add(player);
+      scene.add(playerCollisionMesh);
+    } else {
+      scene.add(object);
+      scene.add(collisionMesh);
+      obstacles.push(collisionMesh);
     }
   });
+}
 
-  player = boat;
-  scene.add(player);
-
-  tempBoundingBox.setFromObject(player).getSize(tempVector);
-  tempVector.multiplyScalar(0.9);
-  // make meshes more accurate later
-  playerCollisionMesh = new THREE.Mesh(
-    new THREE.BoxGeometry(tempVector.x, tempVector.y, tempVector.z)
-  );
-  playerCollisionMesh.visible = false;
-  scene.add(playerCollisionMesh);
-
-  other = boat.clone();
+function generateRandomPosition() {
   let randomX = Math.random() * 20 - 10;
   while (Math.abs(randomX) < 2) {
     randomX = Math.random() * 20 - 10;
@@ -129,22 +144,43 @@ loader.load("boat.obj", (boat) => {
   while (Math.abs(randomZ) < 2) {
     randomZ = Math.random() * 20 - 10;
   }
-  other.position.set(randomX, 0, randomZ);
-  scene.add(other);
+  return new THREE.Vector3(randomX, 0, randomZ);
+}
 
-  tempBoundingBox.setFromObject(other).getSize(tempVector);
-  tempVector.multiplyScalar(0.9);
-  // make meshes more accurate later
-  otherCollisionMesh = new THREE.Mesh(
-    new THREE.BoxGeometry(tempVector.x, tempVector.y, tempVector.z)
-  );
-  otherCollisionMesh.visible = false;
-  otherCollisionMesh.position.copy(other.position);
-  scene.add(otherCollisionMesh);
-  obstacles.push(otherCollisionMesh);
+loadObj({
+  file: "boat.obj",
+  bbDimensions: new THREE.Vector3(2, 1, 5),
+  bbOffset: new THREE.Vector3(0, 0, -0.5),
+  scale: new THREE.Vector3(0.01, 0.01, 0.01),
+  rotation: new THREE.Euler(-Math.PI / 2, 0, Math.PI / 2),
+  color: new THREE.Color(0x8b4513),
+  // visible: true,
+  isPlayer: true,
+});
+
+loadObj({
+  file: "boat.obj",
+  bbDimensions: new THREE.Vector3(2, 1, 5),
+  bbOffset: new THREE.Vector3(0, 0, -0.5),
+  position: generateRandomPosition(),
+  scale: new THREE.Vector3(0.01, 0.01, 0.01),
+  rotation: new THREE.Euler(-Math.PI / 2, 0, Math.PI / 2),
+  color: new THREE.Color(0x8b4513),
+  // visible: true,
+});
+
+loadObj({
+  file: "robot.obj",
+  bbDimensions: new THREE.Vector3(4, 13, 3),
+  bbOffset: new THREE.Vector3(0, 6, 0),
+  position: generateRandomPosition(),
+  scale: new THREE.Vector3(0.01, 0.01, 0.01),
+  // visible: true,
 });
 
 // start of SAT collision detection
+
+const tempVector = new THREE.Vector3();
 
 function getProjection(object, axis) {
   const vertices = object.geometry.getAttribute("position");
@@ -256,7 +292,7 @@ window.addEventListener("keyup", (e) => {
 
 let velocity = 0;
 const ACCELERATION = 0.005;
-const ROTATION_SPEED = 0.025;
+const ROTATION_SPEED = 0.05;
 const FRICTION = 0.99;
 const COLLISION_CHECK_RADIUS = 10;
 const VERTICAL_SPEED = 0.05;
