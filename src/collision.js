@@ -41,18 +41,39 @@ directionalLight.shadow.camera.top = 10;
 directionalLight.shadow.camera.bottom = -10;
 scene.add(directionalLight);
 
+function getRandomGeometry() {
+  const geometries = [
+    new THREE.BoxGeometry(Math.random() + 1, Math.random() + 1, Math.random() + 1),
+    new THREE.CapsuleGeometry(Math.random() + 1, Math.random() + 1),
+    new THREE.CylinderGeometry(Math.random() + 1, Math.random() + 1, Math.random() + 1),
+    new THREE.DodecahedronGeometry(Math.random() + 1),
+    new THREE.IcosahedronGeometry(Math.random() + 1),
+    new THREE.OctahedronGeometry(Math.random() + 1),
+    new THREE.TetrahedronGeometry(Math.random() + 1),
+  ];
+
+  return geometries[Math.floor(Math.random() * geometries.length)];
+}
+
 const obstacles = [];
 for (let i = 0; i < 10; i++) {
   const obstacle = new THREE.Mesh(
-    // change geometries
-    new THREE.IcosahedronGeometry(1),
+    getRandomGeometry(),
     new THREE.MeshPhongMaterial({
       color: new THREE.Color().setHSL(Math.random(), 1, 0.5),
     })
   );
   obstacle.castShadow = true;
   obstacle.receiveShadow = true;
-  obstacle.position.set(Math.random() * 20 - 10, 0, Math.random() * 20 - 10);
+  let randomX = Math.random() * 20 - 10;
+  while (Math.abs(randomX) < 2) {
+    randomX = Math.random() * 20 - 10;
+  }
+  let randomZ = Math.random() * 20 - 10;
+  while (Math.abs(randomZ) < 2) {
+    randomZ = Math.random() * 20 - 10;
+  }
+  obstacle.position.set(randomX, 0, randomZ);
   scene.add(obstacle);
   obstacles.push(obstacle);
 }
@@ -92,7 +113,15 @@ loader.load("boat.obj", (boat) => {
   scene.add(playerCollisionMesh);
 
   other = boat.clone();
-  other.position.set(Math.random() * 20 - 10, 0, Math.random() * 20 - 10);
+  let randomX = Math.random() * 20 - 10;
+  while (Math.abs(randomX) < 2) {
+    randomX = Math.random() * 20 - 10;
+  }
+  let randomZ = Math.random() * 20 - 10;
+  while (Math.abs(randomZ) < 2) {
+    randomZ = Math.random() * 20 - 10;
+  }
+  other.position.set(randomX, 0, randomZ);
   scene.add(other);
 
   tempBoundingBox.setFromObject(other).getSize(tempVector);
