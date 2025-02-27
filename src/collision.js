@@ -41,6 +41,23 @@ directionalLight.shadow.camera.top = 10;
 directionalLight.shadow.camera.bottom = -10;
 scene.add(directionalLight);
 
+const keys = {
+  w: false,
+  s: false,
+  a: false,
+  d: false,
+  " ": false,
+  shift: false,
+};
+
+window.addEventListener("keydown", (e) => {
+  if (e.key.toLowerCase() in keys) keys[e.key.toLowerCase()] = true;
+});
+
+window.addEventListener("keyup", (e) => {
+  if (e.key.toLowerCase() in keys) keys[e.key.toLowerCase()] = false;
+});
+
 function getRandomGeometry() {
   const geometries = [
     new THREE.BoxGeometry(
@@ -64,6 +81,10 @@ function getRandomGeometry() {
 }
 
 const obstacles = [];
+const normalsMap = new Map();
+const verticesMap = new Map();
+const tempVector = new THREE.Vector3();
+
 for (let i = 0; i < 10; i++) {
   const obstacle = new THREE.Mesh(
     getRandomGeometry(),
@@ -84,6 +105,8 @@ for (let i = 0; i < 10; i++) {
   obstacle.position.set(randomX, 0, randomZ);
   scene.add(obstacle);
   obstacles.push(obstacle);
+  normalsMap.set(obstacle, getNormals(obstacle));
+  verticesMap.set(obstacle, getVertices(obstacle));
 }
 
 const loader = new OBJLoader();
@@ -132,6 +155,9 @@ function loadObj({
       scene.add(collisionMesh);
       obstacles.push(collisionMesh);
     }
+
+    normalsMap.set(collisionMesh, getNormals(collisionMesh));
+    verticesMap.set(collisionMesh, getVertices(collisionMesh));
   });
 }
 
@@ -147,51 +173,61 @@ function generateRandomPosition() {
   return new THREE.Vector3(randomX, 0, randomZ);
 }
 
+const boatBBOffset = new THREE.Vector3(0, 0, -0.5);
+
 loadObj({
   file: "boat.obj",
   bbDimensions: new THREE.Vector3(2, 1, 5),
-  bbOffset: new THREE.Vector3(0, 0, -0.5),
+  bbOffset: boatBBOffset,
   scale: new THREE.Vector3(0.01, 0.01, 0.01),
   rotation: new THREE.Euler(-Math.PI / 2, 0, Math.PI / 2),
   color: new THREE.Color(0x8b4513),
-  // visible: true,
+  visible: true,
   isPlayer: true,
 });
 
 loadObj({
   file: "boat.obj",
   bbDimensions: new THREE.Vector3(2, 1, 5),
-  bbOffset: new THREE.Vector3(0, 0, -0.5),
+  bbOffset: boatBBOffset,
   position: generateRandomPosition(),
   scale: new THREE.Vector3(0.01, 0.01, 0.01),
   rotation: new THREE.Euler(-Math.PI / 2, 0, Math.PI / 2),
   color: new THREE.Color(0x8b4513),
-  // visible: true,
+  visible: true,
 });
 
-loadObj({
-  file: "robot.obj",
-  bbDimensions: new THREE.Vector3(4, 13, 3),
-  bbOffset: new THREE.Vector3(0, 6, 0),
-  position: generateRandomPosition(),
-  scale: new THREE.Vector3(0.01, 0.01, 0.01),
-  // visible: true,
-});
+// loadObj({
+//   file: "robot.obj",
+//   bbDimensions: new THREE.Vector3(4, 13, 3),
+//   bbOffset: new THREE.Vector3(0, 6, 0),
+//   position: generateRandomPosition(),
+//   scale: new THREE.Vector3(0.01, 0.01, 0.01),
+//   // visible: true,
+// });
 
 // start of SAT collision detection
+function getVertices(object) {
+  const verticesAttribute = object.geometry.getAttribute("position");
+  const vertices = [];
 
-const tempVector = new THREE.Vector3();
+  for (let i = 0; i < verticesAttribute.count; i++) {
+    tempVector.fromBufferAttribute(verticesAttribute, i).applyMatrix4(object.matrixWorld);
+    vertices.push(tempVector.clone());
+  }
+
+  return vertices;
+}
 
 function getProjection(object, axis) {
-  const vertices = object.geometry.getAttribute("position");
+  if (object === playerCollisionMesh) verticesMap.set(playerCollisionMesh, getVertices(playerCollisionMesh));
+
+  const vertices = verticesMap.get(object);
   let min = Infinity;
   let max = -Infinity;
 
-  for (let i = 0; i < vertices.count; i++) {
-    tempVector
-      .fromBufferAttribute(vertices, i)
-      .applyMatrix4(object.matrixWorld);
-    const dot = axis.dot(tempVector);
+  for (const vertex of vertices) {
+    const dot = axis.dot(vertex);
     min = Math.min(min, dot);
     max = Math.max(max, dot);
   }
@@ -199,60 +235,60 @@ function getProjection(object, axis) {
   return { min, max };
 }
 
-// make more efficient later
-function removeDuplicatesAndNormalize(normals) {
-  const uniqueNormals = [];
-  const EPSILON = 0.000001;
+function positiveVectorKey(vector) {
+  return `${Math.round(vector.x * 1000)},${Math.round(vector.y * 1000)},${Math.round(vector.z * 1000)}`;
+}
 
-  outer: for (const normal of normals) {
-    for (const uniqueNormal of uniqueNormals) {
-      const dot = Math.abs(normal.dot(uniqueNormal));
-      if (Math.abs(dot - 1) < EPSILON) {
-        continue outer;
-      }
-    }
-    uniqueNormals.push(normal.normalize());
-  }
+function negativeVectorKey(vector) {
+  return `${Math.round(-vector.x * 1000)},${Math.round(-vector.y * 1000)},${Math.round(-vector.z * 1000)}`;
+}
 
-  return uniqueNormals;
+function removeDuplicates(normals) {
+  const unique = new Set();
+
+  return normals.filter((normal) => {
+    const positiveKey = positiveVectorKey(normal);
+    const negativeKey = negativeVectorKey(normal);
+    if (unique.has(positiveKey) || unique.has(negativeKey)) return false;
+    unique.add(positiveKey);
+    unique.add(negativeKey);
+    return true;
+  });
 }
 
 function getNormals(object) {
   const normalsAttribute = object.geometry.getAttribute("normal");
   const normals = [];
+  const unique = new Set();
+
+  object.updateMatrixWorld(true);
 
   for (let i = 0; i < normalsAttribute.count; i++) {
-    tempVector
-      .fromBufferAttribute(normalsAttribute, i)
-      .applyMatrix4(object.matrixWorld.invert().transpose());
+    tempVector.fromBufferAttribute(normalsAttribute, i).applyMatrix4(object.matrixWorld.invert().transpose()).normalize();
+    const positiveKey = positiveVectorKey(tempVector);
+    const negativeKey = negativeVectorKey(tempVector);
+    if (unique.has(positiveKey) || unique.has(negativeKey)) continue;
+    unique.add(positiveKey);
+    unique.add(negativeKey);
     normals.push(tempVector.clone());
   }
 
   return normals;
 }
 
-function checkCollision(object1, object2) {
+function checkCollision(playerCollisionMesh, obstacle) {
   let minOverlap = Infinity;
   let minAxis;
 
-  for (const axis of removeDuplicatesAndNormalize([
-    ...getNormals(object1),
-    ...getNormals(object2),
-  ])) {
-    const projection1 = getProjection(object1, axis);
-    const projection2 = getProjection(object2, axis);
+  const allAxes = removeDuplicates([...normalsMap.get(playerCollisionMesh), ...normalsMap.get(obstacle)]);
 
-    if (
-      projection1.max <= projection2.min ||
-      projection2.max <= projection1.min
-    ) {
-      return null;
-    }
+  for (const axis of allAxes) {
+    const projection1 = getProjection(playerCollisionMesh, axis);
+    const projection2 = getProjection(obstacle, axis);
 
-    const overlap = Math.min(
-      projection1.max - projection2.min,
-      projection2.max - projection1.min
-    );
+    if (projection1.max <= projection2.min || projection2.max <= projection1.min) return null;
+
+    const overlap = Math.min(projection1.max - projection2.min, projection2.max - projection1.min);
 
     if (overlap < minOverlap) {
       minOverlap = overlap;
@@ -262,40 +298,17 @@ function checkCollision(object1, object2) {
 
   return { minAxis, minOverlap };
 }
-
 // end of SAT collision detection
 
-const keys = {
-  w: false,
-  s: false,
-  a: false,
-  d: false,
-  " ": false,
-  shift: false,
-};
-
-window.addEventListener("keydown", (e) => {
-  if (e.key.toLowerCase() in keys) {
-    keys[e.key.toLowerCase()] = true;
-  } else if (e.key === " ") {
-    keys[" "] = true;
-  }
-});
-
-window.addEventListener("keyup", (e) => {
-  if (e.key.toLowerCase() in keys) {
-    keys[e.key.toLowerCase()] = false;
-  } else if (e.key === " ") {
-    keys[" "] = false;
-  }
-});
-
 let velocity = 0;
+let isRocking = false;
+let hasImmunity = false;
 const ACCELERATION = 0.005;
 const ROTATION_SPEED = 0.05;
+const VERTICAL_SPEED = 0.1;
 const FRICTION = 0.99;
 const COLLISION_CHECK_RADIUS = 10;
-const VERTICAL_SPEED = 0.05;
+const IMMUNITY_DURATION = 1000;
 const direction = new THREE.Vector3(0, 0, -1);
 const worldUp = new THREE.Vector3(0, 1, 0);
 const toObstacle = new THREE.Vector3();
@@ -304,43 +317,44 @@ function animate() {
   requestAnimationFrame(animate);
 
   if (playerCollisionMesh) {
-    if (keys.w) velocity += ACCELERATION;
-    if (keys.s) velocity -= ACCELERATION;
-    if (keys.a) {
+    if (keys.w && !isRocking) velocity += ACCELERATION;
+    if (keys.s && !isRocking) velocity -= ACCELERATION;
+    if (keys.a && !isRocking) {
       player.rotation.z += ROTATION_SPEED;
       playerCollisionMesh.rotation.y += ROTATION_SPEED;
       direction.applyAxisAngle(worldUp, ROTATION_SPEED);
+      boatBBOffset.applyAxisAngle(worldUp, ROTATION_SPEED);
     }
-    if (keys.d) {
+    if (keys.d && !isRocking) {
       player.rotation.z -= ROTATION_SPEED;
       playerCollisionMesh.rotation.y -= ROTATION_SPEED;
       direction.applyAxisAngle(worldUp, -ROTATION_SPEED);
+      boatBBOffset.applyAxisAngle(worldUp, -ROTATION_SPEED);
     }
-    if (keys[" "]) {
+    if (keys[" "] && !isRocking) {
       player.position.y += VERTICAL_SPEED;
       playerCollisionMesh.position.y += VERTICAL_SPEED;
     }
-    if (keys.shift) {
+    if (keys.shift && !isRocking) {
       player.position.y -= VERTICAL_SPEED;
       playerCollisionMesh.position.y -= VERTICAL_SPEED;
     }
+
     velocity *= FRICTION;
 
-    player.position.add(direction.clone().multiplyScalar(velocity));
-    playerCollisionMesh.position.copy(player.position);
+    player.position.addScaledVector(direction, velocity);
+    playerCollisionMesh.position.copy(player.position).add(boatBBOffset);
 
     for (const obstacle of obstacles) {
       toObstacle.subVectors(obstacle.position, playerCollisionMesh.position);
-      const distanceSquared = toObstacle.lengthSq();
-
-      if (distanceSquared < COLLISION_CHECK_RADIUS * COLLISION_CHECK_RADIUS) {
+      if (toObstacle.lengthSq() < COLLISION_CHECK_RADIUS * COLLISION_CHECK_RADIUS) {
         const collision = checkCollision(playerCollisionMesh, obstacle);
         if (collision) {
           if (toObstacle.dot(collision.minAxis) > 0) collision.minAxis.negate();
-          player.position.add(
-            collision.minAxis.multiplyScalar(collision.minOverlap)
-          );
-          playerCollisionMesh.position.copy(player.position);
+          player.position.addScaledVector(collision.minAxis, collision.minOverlap);
+          playerCollisionMesh.position.copy(player.position).add(boatBBOffset);
+          if (!isRocking && !hasImmunity) animateRocking(velocity);
+          velocity = 0;
         }
       }
     }
@@ -353,3 +367,33 @@ function animate() {
 }
 
 animate();
+
+function animateRocking(velocity) {
+  isRocking = true;
+  
+  let elapsedTime = 0;
+  const ROCKING_DURATION = 2000;
+  const MS_PER_FRAME = 1000 / 120;
+  const MAX_OFFSET = Math.max(Math.PI / 6 * velocity * 5, Math.PI / 6);
+  const DAMPING = 10;
+  const NUM_OSCILLATIONS = 5;
+  
+  const animation = setInterval(() => {
+    elapsedTime += MS_PER_FRAME;
+
+    const progress = elapsedTime / ROCKING_DURATION;
+    const offset = MAX_OFFSET * Math.exp(-DAMPING * progress) * Math.sin(2 * Math.PI * NUM_OSCILLATIONS * progress);
+    player.rotation.x = -Math.PI / 2 + offset;
+    playerCollisionMesh.rotation.x = offset;
+    
+    if (elapsedTime >= ROCKING_DURATION / 3) {
+      clearInterval(animation);
+      isRocking = false;
+      hasImmunity = true;
+      
+      setTimeout(() => {
+        hasImmunity = false;
+      }, IMMUNITY_DURATION);
+    }
+  }, MS_PER_FRAME);
+}
