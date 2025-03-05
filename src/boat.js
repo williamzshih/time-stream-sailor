@@ -4,6 +4,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 // import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+(function(){var script=document.createElement('script');script.onload=function(){var stats=new Stats();document.body.appendChild(stats.dom);requestAnimationFrame(function loop(){stats.update();requestAnimationFrame(loop)});};script.src='https://mrdoob.github.io/stats.js/build/stats.min.js';document.head.appendChild(script);})()
 // Scene setup
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -56,49 +57,69 @@ const loader = new OBJLoader();
 let playerCollisionMesh;
 function loadObj({
     file,
-    bbDimensions,
-    bbOffset = new THREE.Vector3(),
     position = new THREE.Vector3(),
     scale = new THREE.Vector3(1, 1, 1),
     rotation = new THREE.Euler(),
     color = new THREE.Color(0x776947),
-    visible = false,
+    copies = 0,
     isPlayer = false,
-  }) {
+}) {
     loader.load(file, (object) => {
-      object.position.copy(position);
-      object.scale.copy(scale);
-      object.rotation.copy(rotation);
-  
-      object.traverse((child) => {
-        if (child.isMesh) {
-          child.geometry = mergeVertices(child.geometry);
-          child.material = new THREE.MeshPhongMaterial({ color });
-          child.castShadow = true;
-          child.receiveShadow = true;
+
+
+        object.position.copy(position);
+        object.scale.copy(scale);
+        object.rotation.copy(rotation);
+        object.updateMatrixWorld(true);
+
+        let modelTemplate = null;
+        object.traverse((child) => {
+            if (child.isMesh) {
+                modelTemplate = child;
+                child.geometry = mergeVertices(child.geometry);
+                child.material = new THREE.MeshPhongMaterial({ color });
+                child.castShadow = true;
+                child.receiveShadow = true;
+            }
+        });
+
+
+        
+        if (copies > 1) {
+            // 🚀 **Use InstancedMesh for multiple copies**
+            const instancedMesh = new THREE.InstancedMesh(
+                modelTemplate.geometry.clone(),
+                modelTemplate.material.clone(),
+                copies
+            );
+
+            const dummy = new THREE.Object3D();
+            for (let i = 0; i < copies; i++) {
+                dummy.position.set(
+                    THREE.MathUtils.randFloat(poolBoundaries.minX + 30, poolBoundaries.maxX - 30),
+                    0,
+                    THREE.MathUtils.randFloat(poolBoundaries.minZ + 3, poolBoundaries.maxZ - 3)
+                );
+                dummy.scale.copy(scale);
+                dummy.rotation.copy(rotation);
+                dummy.updateMatrix();
+                instancedMesh.setMatrixAt(i, dummy.matrix);
+            }
+
+            instancedMesh.instanceMatrix.needsUpdate = true;
+            scene.add(instancedMesh);
+        } else {
+            // 🚀 **For single objects, load normally**
+
+            scene.add(object);
+
+            if (isPlayer) {
+                boat = object;
+            }
         }
-      });
-  
-      // 🎯 Create collision bounding box
-      const collisionMesh = new THREE.Mesh(
-        new THREE.BoxGeometry(bbDimensions.x, bbDimensions.y, bbDimensions.z),
-        new THREE.MeshBasicMaterial({ wireframe: true })
-      );
-      collisionMesh.visible = visible;
-      collisionMesh.position.copy(position).add(bbOffset);
-  
-      if (isPlayer) {
-        boat = object; // Keep `boat` as the player variable
-        playerCollisionMesh = collisionMesh;
-        scene.add(boat);
-        scene.add(playerCollisionMesh);
-      } else {
-        scene.add(object);
-        scene.add(collisionMesh);
-        obstacles.push(collisionMesh);
-      }
     });
-  }
+}
+
 
 
 const objectsToLoad = [
@@ -108,10 +129,10 @@ const objectsToLoad = [
     scale: new THREE.Vector3(0.01, 0.01, 0.01),
     rotation: new THREE.Euler(-1.57, 0, 0),
     color: new THREE.Color(0xb5823c), 
-    bbDimensions: new THREE.Vector3(2, 1, 4), // Bounding Box Size
-    bbOffset: new THREE.Vector3(0, 0.5, 0), // Offset if needed
+    // bbDimensions: new THREE.Vector3(2, 1, 4), // Bounding Box Size
+    // bbOffset: new THREE.Vector3(0, 0.5, 0), // Offset if needed
     isPlayer: true, // Mark the boat as the player
-    visible: true, // Show wireframe for debugging
+    // visible: true, // Show wireframe for debugging
 },
 {
     file: "objects/head.obj",
@@ -119,10 +140,10 @@ const objectsToLoad = [
     scale: new THREE.Vector3(0.3, 0.3, 0.3),
     rotation: new THREE.Euler(-1.57, 0, 1.57),
     color: new THREE.Color(0xffe54f), 
-    bbDimensions: new THREE.Vector3(1, 1, 1),
-    bbOffset: new THREE.Vector3(0, 0.5, 0),
+    // bbDimensions: new THREE.Vector3(1, 1, 1),
+    // bbOffset: new THREE.Vector3(0, 0.5, 0),
     isPlayer: false,
-    visible: true, // Hide wireframe
+    copies : 20,
 }
 ];
 
@@ -198,11 +219,11 @@ const swimmingPool = createSwimmingPool(500, 10, 30, 1);
 
 
 let velocity = 0;
-let acceleration = 0.02;
+let acceleration = 0.05;
 let friction = 0.93;
 let angularVelocity = 0;
 let angularAcceleration = 0.03;
-let maxSpeed = 0.3;
+let maxSpeed = 0.6;
 let direction = new THREE.Vector3(1, 0, 0); // Initial direction along x-axis
 const movement = { forward: false, backward: false, left: false, right: false, freeCamera: false };
 
