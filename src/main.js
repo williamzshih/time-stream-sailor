@@ -25,6 +25,8 @@ import * as THREE from 'three';
 import * as dat from 'dat.gui'; // GUI
 import Stats from 'stats.js'; // FPS counter
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader';
+import { mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 // import { compute, step } from 'three/tsl';
 
 
@@ -35,6 +37,8 @@ const camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.inner
 
 const renderer = new THREE.WebGLRenderer();
 renderer.setSize( window.innerWidth, window.innerHeight );
+renderer.shadowMap.enabled = true;
+renderer.setClearColor(0x87ceeb);
 document.body.appendChild( renderer.domElement );
 
 // ADD FPS COUNTER
@@ -43,6 +47,9 @@ stats.showPanel(0);
 document.body.appendChild(stats.dom);
 
 const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.minDistance = 1;
+controls.maxDistance = 3;
 // camera.position.set(1.5, 1.5, 1.5);
 // controls.target.set(0, 0, 0);
 // 2D testing
@@ -68,8 +75,17 @@ const pointLight = new THREE.PointLight(0xffffff, 100, 100);
 pointLight.position.set(5, 5, 5); // Position the light
 scene.add(pointLight);
 
-const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-directionalLight.position.set(0.5, .0, 1.0).normalize();
+// const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+// directionalLight.position.set(0.5, .0, 1.0).normalize();
+const directionalLight = new THREE.DirectionalLight();
+directionalLight.position.set(10, 10, 10);
+directionalLight.castShadow = true;
+directionalLight.shadow.camera.near = 0.1;
+directionalLight.shadow.camera.far = 1000;
+directionalLight.shadow.camera.right = 10;
+directionalLight.shadow.camera.left = -10;
+directionalLight.shadow.camera.top = 10;
+directionalLight.shadow.camera.bottom = -10;
 scene.add(directionalLight);
 
 const ambientLight = new THREE.AmbientLight(0x505050);  // Soft white light
@@ -79,9 +95,332 @@ const phong_material = new THREE.MeshPhongMaterial({
     color: 0x00ff00, // Green color
     shininess: 100   // Shininess of the material
 });
+
+const ground = new THREE.Mesh(
+    new THREE.PlaneGeometry(1000, 1000),
+    new THREE.MeshPhongMaterial({ color: 0x2e8b57 })
+  );
+ground.rotation.x = -Math.PI / 2;
+ground.position.y = -1;
+ground.receiveShadow = true;
+scene.add(ground);
+
+const waterLevelGeometry = new THREE.PlaneGeometry();
+const waterLevelMaterial = new THREE.MeshBasicMaterial({
+    color: 0x00ffff,
+    transparent: true,
+    opacity: 0.5,
+});
+const waterLevelMesh = new THREE.Mesh(waterLevelGeometry, waterLevelMaterial);
+waterLevelMesh.rotation.x = -Math.PI / 2;
+waterLevelMesh.visible = false;
+scene.add(waterLevelMesh);
 // **************************************************************************************************
 
 
+// **************************************************************************************************
+// *********************************** OBJECT LOADING ***********************************************
+// **************************************************************************************************
+function generateRandomGeometry() {
+  const geometries = [
+    new THREE.BoxGeometry(
+      Math.random() / 3,
+      Math.random() / 3,
+      Math.random() / 3
+    ),
+    new THREE.CapsuleGeometry(Math.random() / 3, Math.random() / 3),
+    new THREE.CylinderGeometry(
+      Math.random() / 3,
+      Math.random() / 3,
+      Math.random() / 3
+    ),
+    new THREE.DodecahedronGeometry(Math.random() / 3),
+    new THREE.IcosahedronGeometry(Math.random() / 3),
+    new THREE.OctahedronGeometry(Math.random() / 3),
+    new THREE.TetrahedronGeometry(Math.random() / 3),
+  ];
+  
+  return geometries[Math.floor(Math.random() * geometries.length)];
+}
+
+function generateRandomPosition() {
+  let randomX = Math.random() * 2 - 1;
+  while (Math.abs(randomX) < 0.5) randomX = Math.random() * 2 - 1;
+  let randomZ = Math.random() * 2 - 1;
+  while (Math.abs(randomZ) < 0.5) randomZ = Math.random() * 2 - 1;
+  return new THREE.Vector3(randomX, 0, randomZ);
+}
+
+const obstacles = [];
+const normalsMap = new Map();
+const verticesMap = new Map();
+const NUM_OBSTACLES = 10;
+const tempVector = new THREE.Vector3();
+
+for (let i = 0; i < NUM_OBSTACLES; i++) {
+  const obstacle = new THREE.Mesh(
+    generateRandomGeometry(),
+    new THREE.MeshPhongMaterial({
+      color: new THREE.Color().setHSL(Math.random(), 1, 0.5),
+    })
+  );
+  obstacle.castShadow = true;
+  obstacle.receiveShadow = true;
+  const randomPosition = generateRandomPosition();
+  obstacle.position.set(randomPosition.x, 0, randomPosition.z);
+  scene.add(obstacle);
+  obstacles.push(obstacle);
+  normalsMap.set(obstacle, getNormals(obstacle));
+  verticesMap.set(obstacle, getVertices(obstacle));
+}
+
+const loader = new OBJLoader(); 
+let player; 
+let playerCollisionMesh; 
+
+// file: name of the obj file
+// bbDimensions: dimensions of the bounding box of the object
+// bbOffset: offset of the bounding box from the center of the object
+// position: position of the object
+// scale: scale of the object
+// rotation: rotation of the object
+// color: color of the object
+// meshVisible: whether the object's collision mesh is visible
+// isPlayer: whether the object is the player (only one object can be the player)
+function loadObj({
+  file,
+  bbDimensions,
+  bbOffset = new THREE.Vector3(),
+  position = new THREE.Vector3(),
+  scale = new THREE.Vector3(1, 1, 1),
+  rotation = new THREE.Euler(),
+  color = new THREE.Color(),
+  meshVisible = false,
+  isPlayer = false,
+}) {
+  loader.load(file, (object) => {
+    object.position.copy(position);
+    object.scale.copy(scale);
+    object.rotation.copy(rotation);
+  
+    object.traverse((child) => {
+      if (child.isMesh) {
+        child.geometry = mergeVertices(child.geometry);
+        child.material = new THREE.MeshPhongMaterial({ color });
+        child.castShadow = true;
+        child.receiveShadow = true;
+      }
+    });
+  
+    const collisionMesh = new THREE.Mesh(
+      new THREE.BoxGeometry(bbDimensions.x, bbDimensions.y, bbDimensions.z),
+      new THREE.MeshBasicMaterial({ wireframe: true })
+    );
+    collisionMesh.visible = meshVisible;
+    collisionMesh.position.copy(position).add(bbOffset);
+  
+    if (isPlayer) {
+      player = object;
+      playerCollisionMesh = collisionMesh;
+      scene.add(player);
+      scene.add(playerCollisionMesh);
+    } else {
+      scene.add(object);
+      scene.add(collisionMesh);
+      obstacles.push(collisionMesh);
+    }
+  
+    normalsMap.set(collisionMesh, getNormals(collisionMesh));
+    verticesMap.set(collisionMesh, getVertices(collisionMesh));
+  });
+}
+
+const boatBBDimensions = new THREE.Vector3(0.175, 0.15, 0.5);
+const boatBBOffset = new THREE.Vector3(-0.01, 0, -0.05); 
+const boatScale = new THREE.Vector3(0.001, 0.001, 0.001);
+const boatRotation = new THREE.Euler(-Math.PI / 2, 0, Math.PI / 2);
+const boatColor = new THREE.Color(0x8b4513);
+
+loadObj({
+  file: "boat.obj",
+  bbDimensions: boatBBDimensions,
+  bbOffset: boatBBOffset,
+  scale: boatScale,
+  rotation: boatRotation,
+  color: boatColor,
+  isPlayer: true,
+});
+
+loadObj({
+  file: "boat.obj",
+  bbDimensions: boatBBDimensions,
+  bbOffset: boatBBOffset,
+  position: generateRandomPosition(),
+  scale: boatScale,
+  rotation: boatRotation,
+  color: boatColor,
+});
+// **************************************************************************************************
+
+// **************************************************************************************************
+// *********************************** SAT COLLISION DETECTION **************************************
+// **************************************************************************************************
+function positiveVectorKey(vector) {
+  return `${Math.round(vector.x * 1000)},${Math.round(vector.y * 1000)},${Math.round(vector.z * 1000)}`;
+}
+
+function negativeVectorKey(vector) {
+  return `${Math.round(-vector.x * 1000)},${Math.round(-vector.y * 1000)},${Math.round(-vector.z * 1000)}`;
+}
+
+function getNormals(object) {
+  const normalsAttribute = object.geometry.getAttribute("normal");
+  const unique = new Set();
+  const normals = [];
+
+  object.updateMatrixWorld(true);
+
+  for (let i = 0; i < normalsAttribute.count; i++) {
+    tempVector.fromBufferAttribute(normalsAttribute, i).applyMatrix4(object.matrixWorld.invert().transpose()).normalize();
+    const positiveKey = positiveVectorKey(tempVector);
+    const negativeKey = negativeVectorKey(tempVector);
+    if (unique.has(positiveKey) || unique.has(negativeKey)) continue;
+    unique.add(positiveKey);
+    unique.add(negativeKey);
+    normals.push(tempVector.clone());
+  }
+
+  return normals;
+}
+
+function getVertices(object) {
+  const verticesAttribute = object.geometry.getAttribute("position");
+  const vertices = [];
+
+  for (let i = 0; i < verticesAttribute.count; i++) {
+    tempVector.fromBufferAttribute(verticesAttribute, i).applyMatrix4(object.matrixWorld);
+    vertices.push(tempVector.clone());
+  }
+
+  return vertices;
+}
+
+function checkCollision(playerCollisionMesh, obstacle) {
+  let minOverlap = Infinity;
+  let minAxis;
+
+  const allAxes = removeDuplicates([...normalsMap.get(playerCollisionMesh), ...normalsMap.get(obstacle)]);
+
+  for (const axis of allAxes) {
+    const projection1 = getProjection(playerCollisionMesh, axis);
+    const projection2 = getProjection(obstacle, axis);
+
+    if (projection1.max <= projection2.min || projection2.max <= projection1.min) return;
+
+    const overlap = Math.min(projection1.max - projection2.min, projection2.max - projection1.min);
+
+    if (overlap < minOverlap) {
+      minOverlap = overlap;
+      minAxis = axis;
+    }
+  }
+
+  return { minAxis, minOverlap };
+}
+
+function removeDuplicates(normals) {
+  const unique = new Set();
+
+  return normals.filter((normal) => {
+    const positiveKey = positiveVectorKey(normal);
+    const negativeKey = negativeVectorKey(normal);
+    if (unique.has(positiveKey) || unique.has(negativeKey)) return false;
+    unique.add(positiveKey);
+    unique.add(negativeKey);
+    return true;
+  });
+}
+
+function getProjection(object, axis) {
+  if (object === playerCollisionMesh) verticesMap.set(playerCollisionMesh, getVertices(playerCollisionMesh));
+
+  const vertices = verticesMap.get(object);
+  let min = Infinity;
+  let max = -Infinity;
+
+  for (const vertex of vertices) {
+    const dot = axis.dot(vertex);
+    min = Math.min(min, dot);
+    max = Math.max(max, dot);
+  }
+
+  return { min, max };
+}
+// **************************************************************************************************
+
+// **************************************************************************************************
+// *********************************** BOAT MOVEMENT ************************************************
+// **************************************************************************************************
+const keys = {
+  w: false,
+  s: false,
+  a: false,
+  d: false,
+  " ": false,
+  shift: false,
+};
+
+window.addEventListener("keydown", (e) => {
+  if (e.key.toLowerCase() in keys) keys[e.key.toLowerCase()] = true;
+});
+
+window.addEventListener("keyup", (e) => {
+  if (e.key.toLowerCase() in keys) keys[e.key.toLowerCase()] = false;
+});
+
+let boatVelocity = 0;
+let isRocking = false;
+let hasImmunity = false;
+const ACCELERATION = 0.002;
+const ROTATION_SPEED = 0.05;
+const VERTICAL_SPEED = 0.01;
+const FRICTION = 0.99;
+const COLLISION_CHECK_RADIUS = 1;
+const direction = new THREE.Vector3(0, 0, -1);
+const worldUp = new THREE.Vector3(0, 1, 0);
+const toObstacle = new THREE.Vector3();
+
+function animateRocking() {
+  isRocking = true;
+
+  let elapsedTime = 0;
+  const MS_PER_FRAME = 1000 / 120;
+  const ROCKING_DURATION = 1000;
+  const MAX_OFFSET = Math.PI / 6;
+  const DAMPING = 10;
+  const NUM_OSCILLATIONS = 5;
+  const IMMUNITY_DURATION = 1000;
+
+  const animation = setInterval(() => {
+    elapsedTime += MS_PER_FRAME;
+
+    const progress = elapsedTime / ROCKING_DURATION;
+    const offset = MAX_OFFSET * Math.exp(-DAMPING * progress) * Math.sin(2 * Math.PI * NUM_OSCILLATIONS * progress);
+    player.rotation.x = -Math.PI / 2 + offset;
+    playerCollisionMesh.rotation.x = offset;
+
+    if (elapsedTime >= ROCKING_DURATION / 3) {
+      clearInterval(animation);
+      isRocking = false;
+      hasImmunity = true;
+      
+      setTimeout(() => {
+        hasImmunity = false;
+      }, IMMUNITY_DURATION);
+    }
+  }, MS_PER_FRAME);
+}
+// **************************************************************************************************
 
 // **************************************************************************************************
 // *********************************** SET UP FLUID AND BOUNDARY ************************************
@@ -104,6 +443,11 @@ var params = {
     smoothing_radius: 0.1,      // <= 0.1 nicer looking
     grav_strength: 1.5,
     rest_density_factor: 1,    // unstable for < 2
+    
+    // BUOYANCY PROPERTIES
+    buoyancy_strength: 1,           // Multiplier for buoyancy force
+    buoyancy_sample_points: 4,      // Number of sample points to use to calculate the water level
+    show_water_level: false,        // Show the water level
 };
 
 // NUMBER OF POINTS
@@ -202,6 +546,13 @@ FluidFolder.add(params, 'smoothing_radius', 0.02, 0.5).name('smoothing_radius');
 FluidFolder.add(params, 'grav_strength', 0, 10).name('grav_strength');
 FluidFolder.add(params, 'rest_density_factor', 0.6, 5).name('Rest Density');
 FluidFolder.open();
+
+// BUOYANCY PROPERTIES
+const BuoyancyFolder = gui.addFolder('Buoyancy Properties');
+BuoyancyFolder.add(params, 'buoyancy_strength', 0.1, 5).name('Buoyancy Strength');
+BuoyancyFolder.add(params, 'buoyancy_sample_points', 1, 10).name('Sample Points').step(1);
+BuoyancyFolder.add(params, 'show_water_level').name('Show Water Level');
+BuoyancyFolder.open();
 // *********************************************************************************
 
 
@@ -325,6 +676,64 @@ function animate() {
         // all_points[i].position.y = (all_points[i].position.y + 1) % 1;
     }
     // current_positions = updated_positions;
+
+    if (playerCollisionMesh) {
+      if (keys.w && !isRocking) {
+        boatVelocity += ACCELERATION;
+        player.position.y -= VERTICAL_SPEED;
+        playerCollisionMesh.position.y -= VERTICAL_SPEED;
+      }
+      if (keys.s && !isRocking) {
+        boatVelocity -= ACCELERATION;
+        player.position.y -= VERTICAL_SPEED;
+        playerCollisionMesh.position.y -= VERTICAL_SPEED;
+      }
+      if (keys.a && !isRocking) {
+        player.rotation.z += ROTATION_SPEED;
+        playerCollisionMesh.rotation.y += ROTATION_SPEED;
+        direction.applyAxisAngle(worldUp, ROTATION_SPEED);
+        boatBBOffset.applyAxisAngle(worldUp, ROTATION_SPEED);
+      }
+      if (keys.d && !isRocking) {
+        player.rotation.z -= ROTATION_SPEED;
+        playerCollisionMesh.rotation.y -= ROTATION_SPEED;
+        direction.applyAxisAngle(worldUp, -ROTATION_SPEED);
+        boatBBOffset.applyAxisAngle(worldUp, -ROTATION_SPEED);
+      }
+      if (keys[" "] && !isRocking) {
+        player.position.y += VERTICAL_SPEED;
+        playerCollisionMesh.position.y += VERTICAL_SPEED;
+      }
+      if (keys.shift && !isRocking) {
+        player.position.y -= VERTICAL_SPEED;
+        playerCollisionMesh.position.y -= VERTICAL_SPEED;
+      }
+    
+      boatVelocity *= FRICTION;
+
+      const buoyancyForce = calculateBuoyancyForce(playerCollisionMesh.position, boatBBDimensions);
+      player.position.y += buoyancyForce.y * 0.001;
+      playerCollisionMesh.position.y += buoyancyForce.y * 0.001;
+    
+      player.position.addScaledVector(direction, boatVelocity);
+      playerCollisionMesh.position.copy(player.position).add(boatBBOffset);
+    
+      for (const obstacle of obstacles) {
+        toObstacle.subVectors(obstacle.position, playerCollisionMesh.position);
+        if (toObstacle.lengthSq() < COLLISION_CHECK_RADIUS * COLLISION_CHECK_RADIUS) {
+          const collision = checkCollision(playerCollisionMesh, obstacle);
+          if (collision) {
+            if (toObstacle.dot(collision.minAxis) > 0) collision.minAxis.negate();
+            player.position.addScaledVector(collision.minAxis, collision.minOverlap);
+            playerCollisionMesh.position.copy(player.position).add(boatBBOffset);
+            if (!isRocking && !hasImmunity) animateRocking();
+            boatVelocity = 0;
+          }
+        }
+      }
+    
+      controls.target.copy(player.position);
+    }
 }
 renderer.setAnimationLoop( animate );
 // **************************************************************************************************
@@ -595,6 +1004,32 @@ function set_up_boundary_points(num_points_per_side, add_to_scene = false){
     }
 }
 
+function calculateBuoyancyForce(boatPosition, boatDimensions) {
+  const waterHeight = calculateWaterHeight();
+  const boatBottomHeight = boatPosition.y - boatDimensions.y / 2;
+
+  if (params.show_water_level) {
+    waterLevelMesh.position.set(boatPosition.x, waterHeight, boatPosition.z);
+    waterLevelMesh.visible = true;
+  }
+  
+  const baseArea = boatDimensions.x * boatDimensions.z;
+  const submergedDepth = Math.max(0, Math.min(waterHeight - boatBottomHeight, boatDimensions.y)); 
+  const submergedVolume = baseArea * submergedDepth;
+
+  const buoyancyMagnitude = rest_density() * params.grav_strength * submergedVolume * params.buoyancy_strength;
+  return new THREE.Vector3(0, buoyancyMagnitude, 0);
+}
+
+function calculateWaterHeight() {
+  const sortedParticles = fluid_points.sort((a, b) => b.position.y - a.position.y);
+  const numSamples = Math.min(params.buoyancy_sample_points, sortedParticles.length);
+
+  let totalHeight = 0;
+  for (let i = 0; i < numSamples; i++) totalHeight += sortedParticles[i].position.y;
+
+  return totalHeight / numSamples;
+}
 
 // ******************************** EFFICIENT NEIGHBOR SEARCH FUNCTIONS ************************************
 // convert 3D position of point to integer coordinate of cell point lies in
