@@ -1,8 +1,8 @@
 // **********************************************************************************************
 // *************************************** TERMINAL SETUP ***************************************
 // **********************************************************************************************
-//          npm install --save three    
-//          npm install --save-dev vite  
+    //  npm install --save three    
+    //  npm install --save-dev vite  
 
 // GUI
 //      npm install dat.gui --save-dev
@@ -53,7 +53,7 @@ controls.maxDistance = 3;
 // camera.position.set(1.5, 1.5, 1.5);
 // controls.target.set(0, 0, 0);
 // 2D testing
-camera.position.set(1.1, 0.5, 1.6);
+camera.position.set(0.6, 0.5, 1.7);
 controls.target.set(0.3, 0.1, 0);
 
 // Rendering 3D axis
@@ -428,18 +428,19 @@ function animateRocking() {
 // PARAMETERS CONTROLLABLE IN GUI
 var params = {
     // FLUID VISULIZATION
-    point_radius: 0.01, // 0.05 nice visually
-    point_opacity: 0.7,
-    show_neighbor_search: true,
+    point_radius: 0.08, // 0.08 nice visually with Gaussian Sprite material
+    point_opacity: 0.6, // 0.6 nice visually
+    show_neighbor_search: false,
 
     // BOUNDARY VISUALIZATION
     boundary_point_size: 0.01,
     boundary_point_opacity: 1,
-    boundary_box_width: 1,
+    boundary_box_width: 0.8,
+    boundary_box_length: 1.4,
 
     // FLUID PROPERTIES    
     stiffness: 0.5,
-    viscosity: 400,             // unstable for > 500 --- mu in equations, viscosity of the fluid that resists velocity change
+    viscosity: 100,             // unstable for > 500 --- mu in equations, viscosity of the fluid that resists velocity change
     smoothing_radius: 0.1,      // <= 0.1 nicer looking
     grav_strength: 1.5,
     rest_density_factor: 1,    // unstable for < 2
@@ -472,13 +473,60 @@ const BUFFER = 0.001; // Small buffer to prevent sticking to boundaries
 const DAMPING = 0.8;  // Velocity damping factor
 
 // POINT VISUALIZATION
-const fluid_point_geometry = new THREE.SphereGeometry(params.point_radius);
-const boundary_point_geometry = new THREE.BoxGeometry( params.boundary_point_size, params.boundary_point_size, params.boundary_point_size );
-const fluid_material = new THREE.MeshBasicMaterial({ color: 0x1AA9D0, opacity: params.point_opacity, transparent: true,});
-const boundary_material = new THREE.MeshBasicMaterial({ color: 0x00ff00, opacity: params.boundary_point_opacity, transparent: true,});
 
-const test_material = new THREE.MeshBasicMaterial({ color: 0xff0000, opacity: params.point_opacity, transparent: true,});
-const neighbor_material = new THREE.MeshBasicMaterial({ color: 0xffff00, opacity: params.point_opacity, transparent: true,});
+
+
+// // Try to render them as gaussians
+// const texture = createGaussianTexture();
+
+// const test_point_material = new THREE.PointsMaterial({
+//     size: 0.2,
+//     map: texture,
+//     transparent: true,
+//     depthWrite: false,  // Helps with blending
+//     blending: THREE.AdditiveBlending  // Makes overlapping particles glow
+// });
+
+// // let test_fluid_points = Array.from({length: 1000}, () => new THREE.Mesh(fluid_point_geometry, test_point_material));
+// const geometry = new THREE.BufferGeometry();
+
+// // create a simple square shape. We duplicate the top left and bottom right
+// // vertices because each vertex needs to appear once per triangle.
+// const vertices = new Float32Array( [
+// 	-1.0, -1.0,  1.0, // v0
+// ] );
+
+// // itemSize = 3 because there are 3 values (components) per vertex
+// geometry.setAttribute( 'position', new THREE.BufferAttribute( vertices, 3 ) );
+// const material = new THREE.MeshBasicMaterial( { color: 0xff0000 } );
+// const mesh = new THREE.Mesh( geometry, material );
+
+// // // INITIALIZE FLUID AND ADD TO SCENE
+// // for(let i=0; i<num_fluid_points; i++) {
+// //     test_fluid_points[i].position.set(Math.random()*0.3 + 0.6, Math.random()*0.4 + 0.2, Math.random()*0.5 + 0.1); // Set position to random in box (0,0,0) - (1,1,1)
+// // 	scene.add(test_fluid_points[i]);
+// // }
+
+// const test_geometry = new THREE.BufferGeometry();
+// const test_positions = new Float32Array(1000 * 3); // 1000 particles, each with x, y, z
+
+// // Fill positions with your SPH particle data
+// for (let i = 0; i < 1000; i++) {
+//     test_positions[i * 3] = Math.random() * 0.3; // x
+//     test_positions[i * 3 + 1] = Math.random() * 0.3; // y
+//     test_positions[i * 3 + 2] = Math.random() * 0.3; // z
+// }
+
+// test_geometry.setAttribute("position", new THREE.BufferAttribute(test_positions, 3));
+// const test_points = new THREE.Points(test_geometry, test_point_material);
+// scene.add(test_points);
+
+
+
+
+
+// const test_material = new THREE.MeshBasicMaterial({ color: 0xff0000, opacity: params.point_opacity, transparent: true,});
+// const neighbor_material = new THREE.MeshBasicMaterial({ color: 0xffff00, opacity: params.point_opacity, transparent: true,});
 
 // OTHER CONSTANTS
 const total_volume = 1 * 1 * 1; // volume of the box
@@ -487,15 +535,72 @@ const volume_per_particle = total_volume / num_fluid_points; // volume per parti
 // const boundary_density = 0.001; // effective density of boundary used for calculating boundary forces
 
 // SET UP BOUNDARY
-let boundary_geometry = new THREE.BoxGeometry( params.boundary_box_width, 1, 1 );
+let boundary_geometry = new THREE.BoxGeometry( params.boundary_box_width, 1, params.boundary_box_length );
 let boundary_wireframe = new THREE.WireframeGeometry( boundary_geometry );
 const line = new THREE.LineSegments( boundary_wireframe );
 line.material.depthTest = false;
 line.material.opacity = 0.5;
 line.material.transparent = true;
-line.position.set(params.boundary_box_width / 2,0.5,0.5);
+line.position.set(params.boundary_box_width / 2, 0.5, params.boundary_box_length / 2);
 scene.add( line );
 // **************************************************************************************************
+
+
+
+
+
+
+// *********************************************************************************
+// GEOMETRY AND MATERIAL
+// const fluid_point_geometry = new THREE.SphereGeometry(params.point_radius);
+const boundary_point_geometry = new THREE.BoxGeometry( params.boundary_point_size, params.boundary_point_size, params.boundary_point_size );
+// const fluid_material = new THREE.MeshBasicMaterial({ color: 0x1AA9D0, opacity: params.point_opacity, transparent: true,});
+const boundary_material = new THREE.MeshBasicMaterial({ color: 0x00ff00, opacity: params.boundary_point_opacity, transparent: true,});
+
+// INSTANTIATE THE POINTS
+// let fluid_points = Array.from({length: num_fluid_points}, () => new THREE.Mesh(fluid_point_geometry, fluid_material));
+let boundary_points = Array.from({length: num_boundary_particles}, () => new THREE.Mesh(boundary_point_geometry, boundary_material));
+
+// // INITIALIZE FLUID AND ADD TO SCENE
+// for(let i=0; i<num_fluid_points; i++) {
+//     fluid_points[i].position.set(Math.random()*0.3 + 0.6, Math.random()*0.4 + 0.2, Math.random()*0.5 + 0.1); // Set position to random in box (0,0,0) - (1,1,1)
+// 	scene.add(fluid_points[i]);
+// }
+
+
+
+// Create a shared material for all particles
+const gaussianTexture = createGaussianTexture();
+const fluid_material = new THREE.SpriteMaterial({
+    map: gaussianTexture,
+    color: "rgb(26, 169, 208)",//0x1AA9D0,
+    opacity: params.point_opacity,
+    transparent: true,
+    depthWrite: false,  // Avoid depth conflicts
+    blending: THREE.AdditiveBlending,  // Smooth blending between particles
+});
+
+// Create sprite-based fluid points
+let fluid_points = Array.from({ length: num_fluid_points }, () => new THREE.Sprite(fluid_material));
+
+// INITIALIZE FLUID AND ADD TO SCENE
+for (let i = 0; i < num_fluid_points; i++) {
+    fluid_points[i].scale.set(params.point_radius * 2, params.point_radius * 2, 1);  // Scale sprite to match sphere size
+    fluid_points[i].position.set(
+        Math.random() * 0.3 + 0.5,
+        Math.random() * 0.4 + 0.2,
+        Math.random() * 0.5 + 0.1
+    );
+    scene.add(fluid_points[i]);
+}
+
+
+// INITIALIZE BOUNDARY POINTS AND ADD TO SCENE
+const num_points_per_side = num_boundary_particles / 3;
+set_up_boundary_points(num_points_per_side, true)
+
+
+
 
 
 
@@ -507,10 +612,18 @@ const gui = new dat.GUI();
 
 // POINT VISUALIZATION
 const VisualsFolder = gui.addFolder('Fluid Visuals');
-VisualsFolder.add(params, "point_radius", 0.005, 0.1).name('Point Radius').onChange((newRadius) => {
-    fluid_points.forEach((sphere) => {
-        sphere.geometry.dispose(); // Dispose old geometry
-        sphere.geometry = new THREE.SphereGeometry(newRadius); // Create new geometry
+VisualsFolder.add(params, "point_radius", 0.005, 0.2).name('Point Radius').onChange((newRadius) => {
+//     fluid_points.forEach((sphere) => {
+//         sphere.geometry.dispose(); // Dispose old geometry
+//         sphere.geometry = new THREE.SphereGeometry(newRadius); // Create new geometry
+//     });
+// });
+    fluid_points.forEach((point) => {
+        point.scale.set(newRadius * 2, newRadius * 2, 1);  // Scale sprite to match sphere size
+
+        // point.geometry.dispose(); // Dispose old geometry
+        // fluid_material.
+        // point.geometry = new THREE.SphereGeometry(newRadius); // Create new geometry
     });
 });
 VisualsFolder.add(fluid_material, "opacity", 0, 1).name('Point Opacity');
@@ -522,26 +635,34 @@ VisualsFolder.open();
 const BoundaryFolder = gui.addFolder('Boundaries');
 BoundaryFolder.add(params, "boundary_box_width", 0.1, 1).name('Box Width').onChange((newSize) => { // initialize at max in GUI as I don't want to update hashing declaration yet
     line.geometry.dispose();
-    boundary_geometry = new THREE.BoxGeometry(newSize, 1, 1);
+    boundary_geometry = new THREE.BoxGeometry(newSize, 1, params.boundary_box_length);
     boundary_wireframe = new THREE.WireframeGeometry(boundary_geometry);
     line.geometry = boundary_wireframe;
-    line.position.set(newSize / 2, 0.5, 0.5);
-    set_up_boundary_points(num_points_per_side);
+    line.position.set(newSize / 2, 0.5, params.boundary_box_length / 2);
+    // set_up_boundary_points(num_points_per_side);
 });
-BoundaryFolder.add(params, "boundary_point_size", 0.001, 0.05).name('Point Size').onChange((newSize) => {
-    boundary_points.forEach((boundary_box) => {
-        boundary_box.geometry.dispose(); // Dispose old geometry
-        boundary_box.geometry = new THREE.BoxGeometry(newSize, newSize, newSize); // Create new geometry
-    });
+BoundaryFolder.add(params, "boundary_box_length", 0.1, 3).name('Box Length').onChange((newSize) => { // initialize at max in GUI as I don't want to update hashing declaration yet
+    line.geometry.dispose();
+    boundary_geometry = new THREE.BoxGeometry(params.boundary_box_width, 1, newSize);
+    boundary_wireframe = new THREE.WireframeGeometry(boundary_geometry);
+    line.geometry = boundary_wireframe;
+    line.position.set(params.boundary_box_width / 2, 0.5, newSize / 2);
+    // set_up_boundary_points(num_points_per_side);
 });
-BoundaryFolder.add(boundary_material, "opacity", 0, 1).name('Point Opacity');
+// BoundaryFolder.add(params, "boundary_point_size", 0.001, 0.05).name('Point Size').onChange((newSize) => {
+//     boundary_points.forEach((boundary_box) => {
+//         boundary_box.geometry.dispose(); // Dispose old geometry
+//         boundary_box.geometry = new THREE.BoxGeometry(newSize, newSize, newSize); // Create new geometry
+//     });
+// });
+// BoundaryFolder.add(boundary_material, "opacity", 0, 1).name('Point Opacity');
 BoundaryFolder.open();
 
 
 // FLUID PROPERTIES
 const FluidFolder = gui.addFolder('Fluid Properties');
 FluidFolder.add(params, 'stiffness', 0.05, 5).name('stiffness');
-FluidFolder.add(params, 'viscosity', 0, 2000).name('viscosity');
+FluidFolder.add(params, 'viscosity', 0, 700).name('viscosity');
 FluidFolder.add(params, 'smoothing_radius', 0.02, 0.5).name('smoothing_radius');
 FluidFolder.add(params, 'grav_strength', 0, 10).name('grav_strength');
 FluidFolder.add(params, 'rest_density_factor', 0.6, 5).name('Rest Density');
@@ -558,20 +679,7 @@ BuoyancyFolder.open();
 
 
 
-// *********************************************************************************
-// INSTANTIATE THE POINTS
-let fluid_points = Array.from({length: num_fluid_points}, () => new THREE.Mesh(fluid_point_geometry, fluid_material));
-let boundary_points = Array.from({length: num_boundary_particles}, () => new THREE.Mesh(boundary_point_geometry, boundary_material));
 
-// INITIALIZE FLUID AND ADD TO SCENE
-for(let i=0; i<num_fluid_points; i++) {
-    fluid_points[i].position.set(Math.random()*0.3 + 0.6, Math.random()*0.4 + 0.2, Math.random()*0.5 + 0.1); // Set position to random in box (0,0,0) - (1,1,1)
-	scene.add(fluid_points[i]);
-}
-
-// INITIALIZE BOUNDARY POINTS AND ADD TO SCENE
-const num_points_per_side = num_boundary_particles / 3;
-set_up_boundary_points(num_points_per_side, true)
 
 
 // **************************************************************************************************
@@ -581,6 +689,8 @@ set_up_boundary_points(num_points_per_side, true)
 let animation_time = 0;
 let dt;
 const clock = new THREE.Clock();
+let last_time_spatial_lookup_updated = -1;
+const update_delay = 0.1; // how long to wait before updating the spatial lookup array
 
 // ARRAYS
 let density = Array.from({length: num_points}, (v,i) => i < num_fluid_points ? 0 : rest_density()); // density of each point
@@ -612,31 +722,24 @@ function animate() {
     animation_time += dt; 
 
 
-    // *********** VISUALLY VERIFYING THAT THE NEIGHBOR SEARCH ALGORITHM WORKS ****************
     // Update the spatial_lookup array
-    update_spatial_lookup(); // DO THIS FOR EVERY FRAME
-
-    // first make all same color, then modify
-    for (let i=0; i<num_fluid_points; i++){ fluid_points[i].material = fluid_material; }
-
-    if (params.show_neighbor_search == true) {
-        const test_ind = 0;
-
-        // make test point red
-        fluid_points[test_ind].material = test_material;
-
-        // make neighbor points yellow
-        const test_point = fluid_points[test_ind].position.clone();
-        for (const neighbor_idx of get_neighbor_indices(test_point)){
-            if (neighbor_idx == test_ind) {continue;}
-            fluid_points[neighbor_idx].material = neighbor_material;
-        }
+    if (animation_time - last_time_spatial_lookup_updated > update_delay) {
+        update_spatial_lookup(); // DO THIS FOR EVERY FRAME ? pretty slow.. try doing every <last_time_spatial_lookup_updated> seconds
+        last_time_spatial_lookup_updated = animation_time;
     }
+    
+
+    // *********** VISUALLY VERIFYING THAT THE NEIGHBOR SEARCH ALGORITHM WORKS ****************
+    show_neighbor_searching();
     // **************************************************************************************** 
 
-    const current_positions = fluid_points.map(p => p.position.clone());
-    // i've seen computing density with predicted positions can be unstable, despite being accepeted method in literature. might need to test again later.
-    compute_density(current_positions);
+    // predict positions
+    for (let i = 0; i < num_fluid_points; i++) {
+        predicted_positions[i] = fluid_points[i].position.clone().add( velocity[i].clone().multiplyScalar(dt) );
+    }
+
+    // const current_positions = fluid_points.map(p => p.position.clone());
+    compute_density(predicted_positions);
 
     // compute total force on each FLUID particle (boundary particles stationary)
     for(let i=0; i<num_fluid_points; i++) {
@@ -648,9 +751,9 @@ function animate() {
         const dv0 = a_grav.clone().add(a_viscosity).multiplyScalar(dt); // .add(a_boundary)
         velocity[i].add( dv0 );
         velocity[i] = clamp_velocity(velocity[i]);
-        predicted_positions[i] = fluid_points[i].position.clone().add( velocity[i].clone().multiplyScalar(dt) );
+        // predicted_positions[i] = fluid_points[i].position.clone().add( velocity[i].clone().multiplyScalar(dt) );
 
-        compute_pressure_acceleration(i)
+        compute_pressure_acceleration(i, predicted_positions);
 
         // ------- update velocity ----------
         // fluid_points[i].position.sub( velocity[i].clone().multiplyScalar(dt) ); // go back to before prediction
@@ -785,6 +888,47 @@ function rest_density() {
     return params.rest_density_factor * mass / volume_per_particle;
 }
 
+
+// const test_material = new THREE.MeshBasicMaterial({ color: 0xff0000, opacity: params.point_opacity, transparent: true,});
+// const neighbor_material = new THREE.MeshBasicMaterial({ color: 0xffff00, opacity: params.point_opacity, transparent: true,});
+
+const test_material = new THREE.SpriteMaterial({
+    map: gaussianTexture,
+    color: 0xff0000,  // Keep your fluid color
+    opacity: 1,
+    transparent: true,
+    depthWrite: false,  // Avoid depth conflicts
+    blending: THREE.AdditiveBlending,  // Smooth blending between particles
+});
+
+const neighbor_material = new THREE.SpriteMaterial({
+    map: gaussianTexture,
+    color: 0xffff00,  // Keep your fluid color
+    opacity: 1,
+    transparent: true,
+    depthWrite: false,  // Avoid depth conflicts
+    blending: THREE.AdditiveBlending,  // Smooth blending between particles
+});
+
+function show_neighbor_searching() {
+    // first make all same color, then modify
+    for (let i=0; i<num_fluid_points; i++){ fluid_points[i].material = fluid_material; }
+
+    if (params.show_neighbor_search == true) {
+        const test_ind = 0;
+
+        // make test point red
+        fluid_points[test_ind].material = test_material;
+
+        // make neighbor points yellow
+        const test_point = fluid_points[test_ind].position.clone();
+        for (const neighbor_idx of get_neighbor_indices(test_point)){
+            if (neighbor_idx == test_ind) {continue;}
+            fluid_points[neighbor_idx].material = neighbor_material;
+        }
+    }
+}
+
 // // density correction factor (one layer boundary) for a specified fluid particle
 // function density_correction_factor(particle_index) {
 //     let fluid_particle_sum = 0;
@@ -839,7 +983,13 @@ function compute_viscosity_force(particle_index){
         const velocity_diff = velocity[particle_index].clone().sub(velocity[j].clone());
         // params.viscosity_force.add( velocity_diff.multiplyScalar( 5 * kernel_deriv * mass_array[j] / density[j]) );
         // const grad_sq_v = velocity_diff.multiplyScalar(mass_array[j] / density[j] * Math.abs(kernel_deriv / Math.max(dist, min_separation)));
+        
+        // original lapalacian formulation
         viscosity_force.add(velocity_diff.multiplyScalar(- mass_array[j] / density[j] * Math.abs(kernel_deriv / Math.max(dist, min_separation)) * params.viscosity / density[particle_index]));
+    
+        // // simplified (linear) velocity smoothing - does not work much better
+        // const kernel = kernel2D( dist );
+        // viscosity_force.add( velocity_diff.multiplyScalar(- params.viscosity * mass_array[j] / density[j] * kernel / 100) );
     }
 
     // boundary contribution
@@ -893,16 +1043,18 @@ function compute_density(fluid_positions_arg) {
     }
 }
 
-function compute_pressure_acceleration(i) {
+function compute_pressure_acceleration(i, positions_array) {
     // PRESSURE FORCE: compute gradient of pressure to get acceleration due to pressure -- assumes equation of state p = k * (rho - rho_0)
     pressure_acceleration[i].set(0,0,0);
-    const current_position = fluid_points[i].position.clone();
+    // const current_position = fluid_points[i].position.clone();
+    const current_position = positions_array[i].clone();
 
     // fluid contribution
-    for (const j of get_neighbor_indices(current_position)){
+    for (const j of get_neighbor_indices(current_position)){ // ** may need to change get_neighbor_indices to calculate based on predicted positions
         if (j == i) {continue;}
 
-        const j_to_i = current_position.clone().sub(fluid_points[j].position.clone());
+        // const j_to_i = current_position.clone().sub(fluid_points[j].position.clone());
+        const j_to_i = current_position.clone().sub(positions_array[j].clone());
         const dist = j_to_i.length();
         const kernel_deriv = kernel2D_deriv( dist );
 
@@ -975,11 +1127,15 @@ function handleBoundaryCollisions(i) {
         fluid_points[i].position.z = 0 + BUFFER;
         velocity[i].z = Math.abs(velocity[i].z) * DAMPING;
     }
-    // z = 1
-    if (fluid_points[i].position.z > 1 - BUFFER) {
-        fluid_points[i].position.z = 1 - BUFFER;
+    // z = params.boundary_box_length
+    if (fluid_points[i].position.z > params.boundary_box_length - BUFFER) {
+        fluid_points[i].position.z = params.boundary_box_length - BUFFER;
         velocity[i].z = -Math.abs(velocity[i].z) * DAMPING;
     }
+    
+    // TRY PERIODIC BOUNDARY CONDITIONS - does not work well in neighbor lookup and would have to modify distance calculation in all calculate force functions
+    // fluid_points[i].position.z = (fluid_points[i].position.z + 1) % 1;
+    // fluid_points[i].position.x = (fluid_points[i].position.x + 1) % 1;
 }
 
 function set_up_boundary_points(num_points_per_side, add_to_scene = false){
@@ -1087,6 +1243,7 @@ function addArrays(arr1, arr2) {
 }
 
 const offsets = [-1, 0, 1];
+const num_cells_if_boundary_length_1 = Math.ceil(1 / params.smoothing_radius);
 function get_neighbor_indices(sample_point) {
     let neighbor_indices = [];
     const rSq = params.smoothing_radius ** 2;
@@ -1096,6 +1253,9 @@ function get_neighbor_indices(sample_point) {
             for (let dk = -1; dk <= 1; dk++) {
                 // find cell of sample point
                 const sample_cell_coords = addArrays(position_to_cell_coord(sample_point), [di, dj, dk]);
+                // // make sure cell coordinates obey periodic boundary conditions, where appropriate -- does not currently work
+                // sample_cell_coords[0] = (sample_cell_coords[0] + num_cells_if_boundary_length_1) % num_cells_if_boundary_length_1
+                // sample_cell_coords[2] = (sample_cell_coords[2] + num_cells_if_boundary_length_1) % num_cells_if_boundary_length_1 // search criterion for periodic boundary in z
                 const cell_key = get_LU_key_from_hash( hash_cell_coord(sample_cell_coords));
 
                 const start_ind = start_indices[cell_key];
@@ -1105,7 +1265,19 @@ function get_neighbor_indices(sample_point) {
 
                     // check particle is within smoothing radius
                     const particle_ind = spatial_lookup[lookup_ind][0];
-                    const distSq = fluid_points[particle_ind].position.clone().sub(sample_point).lengthSq();
+                    // const distSq = fluid_points[particle_ind].position.clone().sub(sample_point).lengthSq(); // original
+                    const predicted_pos = predicted_positions[particle_ind].clone()
+                    const sample_to_predicted_vec = predicted_pos.sub(sample_point); // based on predicted positions
+                    const distSq = sample_to_predicted_vec.lengthSq();
+                    // const distSq_no_periodicity = sample_to_predicted_vec.lengthSq();
+
+                    // const z_offset = new THREE.Vector3(0,0,1);
+
+                    // const distSq_z_plus = (sample_to_predicted_vec.add(z_offset)).lengthSq();
+                    // const distSq_z_minus = (sample_to_predicted_vec.sub(z_offset)).lengthSq();
+
+                    // const distSq = Math.min(distSq_no_periodicity, distSq_z_plus, distSq_z_minus);
+
                     if (distSq <= rSq) {
                         neighbor_indices.push(particle_ind);
                     }
@@ -1117,4 +1289,24 @@ function get_neighbor_indices(sample_point) {
 
 
     return neighbor_indices;
+}
+
+
+
+// Create a Gaussian texture for smooth blending
+function createGaussianTexture(size = 128) {
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d");
+
+    // Create a radial gradient
+    const gradient = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    gradient.addColorStop(0, "rgb(255, 255, 255)");
+    gradient.addColorStop(1, "rgba(255, 255, 255, 0)");
+
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, size, size);
+
+    return new THREE.CanvasTexture(canvas);
 }
