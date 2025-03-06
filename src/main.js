@@ -383,7 +383,7 @@ let isRocking = false;
 let hasImmunity = false;
 const ACCELERATION = 0.002;
 const ROTATION_SPEED = 0.05;
-const VERTICAL_SPEED = 0.01;
+const VERTICAL_SPEED = 0.005;
 const FRICTION = 0.99;
 const COLLISION_CHECK_RADIUS = 1;
 const direction = new THREE.Vector3(0, 0, -1);
@@ -447,7 +447,7 @@ var params = {
     
     // BUOYANCY PROPERTIES
     buoyancy_strength: 1,           // Multiplier for buoyancy force
-    buoyancy_sample_points: 4,      // Number of sample points to use to calculate the water level
+    buoyancy_sample_points: 10,      // Number of sample points to use to calculate the water level
     show_water_level: false,        // Show the water level
 };
 
@@ -671,7 +671,7 @@ FluidFolder.open();
 // BUOYANCY PROPERTIES
 const BuoyancyFolder = gui.addFolder('Buoyancy Properties');
 BuoyancyFolder.add(params, 'buoyancy_strength', 0.1, 5).name('Buoyancy Strength');
-BuoyancyFolder.add(params, 'buoyancy_sample_points', 1, 10).name('Sample Points').step(1);
+BuoyancyFolder.add(params, 'buoyancy_sample_points', 1, 100).name('Sample Points').step(1);
 BuoyancyFolder.add(params, 'show_water_level').name('Show Water Level');
 BuoyancyFolder.open();
 // *********************************************************************************
@@ -817,6 +817,9 @@ function animate() {
       const buoyancyForce = calculateBuoyancyForce(playerCollisionMesh.position, boatBBDimensions);
       player.position.y += buoyancyForce.y * 0.001;
       playerCollisionMesh.position.y += buoyancyForce.y * 0.001;
+
+      player.position.y -= params.grav_strength * 0.005;
+      playerCollisionMesh.position.y -= params.grav_strength * 0.005;
     
       player.position.addScaledVector(direction, boatVelocity);
       playerCollisionMesh.position.copy(player.position).add(boatBBOffset);
@@ -1167,7 +1170,7 @@ function calculateBuoyancyForce(boatPosition, boatDimensions) {
   if (params.show_water_level) {
     waterLevelMesh.position.set(boatPosition.x, waterHeight, boatPosition.z);
     waterLevelMesh.visible = true;
-  }
+  } else waterLevelMesh.visible = false;
   
   const baseArea = boatDimensions.x * boatDimensions.z;
   const submergedDepth = Math.max(0, Math.min(waterHeight - boatBottomHeight, boatDimensions.y)); 
@@ -1178,11 +1181,11 @@ function calculateBuoyancyForce(boatPosition, boatDimensions) {
 }
 
 function calculateWaterHeight() {
-  const sortedParticles = fluid_points.sort((a, b) => b.position.y - a.position.y);
-  const numSamples = Math.min(params.buoyancy_sample_points, sortedParticles.length);
+  const distances = fluid_points.sort((a, b) => a.position.distanceTo(playerCollisionMesh.position) - b.position.distanceTo(playerCollisionMesh.position));
+  const numSamples = Math.min(params.buoyancy_sample_points, distances.length);
 
   let totalHeight = 0;
-  for (let i = 0; i < numSamples; i++) totalHeight += sortedParticles[i].position.y;
+  for (let i = 0; i < numSamples; i++) totalHeight += distances[i].position.y;
 
   return totalHeight / numSamples;
 }
