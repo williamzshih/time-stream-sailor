@@ -12,8 +12,21 @@
   <body>
     <script>
       const path = window.location.pathname;
-      let scriptSrc =
-        path === "/" || path === "/main" ? "/src/main.js" : "/src/collision.js";
+      let scriptSrc;
+      switch (path) {
+        case "/":
+          scriptSrc = "/src/main.js";
+          break;
+        case "/boat":
+          scriptSrc = "/src/boat.js";
+          break;
+        case "/fluid":
+          scriptSrc = "/src/fluid.js";
+          break;
+        default:
+          scriptSrc = "/src/main.js";
+          break;
+      }
       const script = document.createElement("script");
       script.type = "module";
       script.src = scriptSrc;
