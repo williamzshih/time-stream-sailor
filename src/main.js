@@ -1,8 +1,8 @@
 // **********************************************************************************************
 // *************************************** TERMINAL SETUP ***************************************
 // **********************************************************************************************
-//          npm install --save three    
-//          npm install --save-dev vite  
+    //  npm install --save three    
+    //  npm install --save-dev vite  
 
 // GUI
 //      npm install dat.gui --save-dev
@@ -25,6 +25,8 @@ import * as THREE from 'three';
 import * as dat from 'dat.gui'; // GUI
 import Stats from 'stats.js'; // FPS counter
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader';
+import { mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 // import { compute, step } from 'three/tsl';
 
 
@@ -35,6 +37,8 @@ const camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.inner
 
 const renderer = new THREE.WebGLRenderer();
 renderer.setSize( window.innerWidth, window.innerHeight );
+renderer.shadowMap.enabled = true;
+renderer.setClearColor(0x87ceeb);
 document.body.appendChild( renderer.domElement );
 
 // ADD FPS COUNTER
@@ -43,10 +47,13 @@ stats.showPanel(0);
 document.body.appendChild(stats.dom);
 
 const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.minDistance = 1;
+controls.maxDistance = 3;
 // camera.position.set(1.5, 1.5, 1.5);
 // controls.target.set(0, 0, 0);
 // 2D testing
-camera.position.set(1.1, 0.5, 1.6);
+camera.position.set(0.6, 0.5, 1.7);
 controls.target.set(0.3, 0.1, 0);
 
 // Rendering 3D axis
@@ -68,8 +75,17 @@ const pointLight = new THREE.PointLight(0xffffff, 100, 100);
 pointLight.position.set(5, 5, 5); // Position the light
 scene.add(pointLight);
 
-const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-directionalLight.position.set(0.5, .0, 1.0).normalize();
+// const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+// directionalLight.position.set(0.5, .0, 1.0).normalize();
+const directionalLight = new THREE.DirectionalLight();
+directionalLight.position.set(10, 10, 10);
+directionalLight.castShadow = true;
+directionalLight.shadow.camera.near = 0.1;
+directionalLight.shadow.camera.far = 1000;
+directionalLight.shadow.camera.right = 10;
+directionalLight.shadow.camera.left = -10;
+directionalLight.shadow.camera.top = 10;
+directionalLight.shadow.camera.bottom = -10;
 scene.add(directionalLight);
 
 const ambientLight = new THREE.AmbientLight(0x505050);  // Soft white light
@@ -79,9 +95,332 @@ const phong_material = new THREE.MeshPhongMaterial({
     color: 0x00ff00, // Green color
     shininess: 100   // Shininess of the material
 });
+
+const ground = new THREE.Mesh(
+    new THREE.PlaneGeometry(1000, 1000),
+    new THREE.MeshPhongMaterial({ color: 0x2e8b57 })
+  );
+ground.rotation.x = -Math.PI / 2;
+ground.position.y = -1;
+ground.receiveShadow = true;
+scene.add(ground);
+
+const waterLevelGeometry = new THREE.PlaneGeometry();
+const waterLevelMaterial = new THREE.MeshBasicMaterial({
+    color: 0x00ffff,
+    transparent: true,
+    opacity: 0.5,
+});
+const waterLevelMesh = new THREE.Mesh(waterLevelGeometry, waterLevelMaterial);
+waterLevelMesh.rotation.x = -Math.PI / 2;
+waterLevelMesh.visible = false;
+scene.add(waterLevelMesh);
 // **************************************************************************************************
 
 
+// **************************************************************************************************
+// *********************************** OBJECT LOADING ***********************************************
+// **************************************************************************************************
+function generateRandomGeometry() {
+  const geometries = [
+    new THREE.BoxGeometry(
+      Math.random() / 3,
+      Math.random() / 3,
+      Math.random() / 3
+    ),
+    new THREE.CapsuleGeometry(Math.random() / 3, Math.random() / 3),
+    new THREE.CylinderGeometry(
+      Math.random() / 3,
+      Math.random() / 3,
+      Math.random() / 3
+    ),
+    new THREE.DodecahedronGeometry(Math.random() / 3),
+    new THREE.IcosahedronGeometry(Math.random() / 3),
+    new THREE.OctahedronGeometry(Math.random() / 3),
+    new THREE.TetrahedronGeometry(Math.random() / 3),
+  ];
+  
+  return geometries[Math.floor(Math.random() * geometries.length)];
+}
+
+function generateRandomPosition() {
+  let randomX = Math.random() * 2 - 1;
+  while (Math.abs(randomX) < 0.5) randomX = Math.random() * 2 - 1;
+  let randomZ = Math.random() * 2 - 1;
+  while (Math.abs(randomZ) < 0.5) randomZ = Math.random() * 2 - 1;
+  return new THREE.Vector3(randomX, 0, randomZ);
+}
+
+const obstacles = [];
+const normalsMap = new Map();
+const verticesMap = new Map();
+const NUM_OBSTACLES = 10;
+const tempVector = new THREE.Vector3();
+
+for (let i = 0; i < NUM_OBSTACLES; i++) {
+  const obstacle = new THREE.Mesh(
+    generateRandomGeometry(),
+    new THREE.MeshPhongMaterial({
+      color: new THREE.Color().setHSL(Math.random(), 1, 0.5),
+    })
+  );
+  obstacle.castShadow = true;
+  obstacle.receiveShadow = true;
+  const randomPosition = generateRandomPosition();
+  obstacle.position.set(randomPosition.x, 0, randomPosition.z);
+  scene.add(obstacle);
+  obstacles.push(obstacle);
+  normalsMap.set(obstacle, getNormals(obstacle));
+  verticesMap.set(obstacle, getVertices(obstacle));
+}
+
+const loader = new OBJLoader(); 
+let player; 
+let playerCollisionMesh; 
+
+// file: name of the obj file
+// bbDimensions: dimensions of the bounding box of the object
+// bbOffset: offset of the bounding box from the center of the object
+// position: position of the object
+// scale: scale of the object
+// rotation: rotation of the object
+// color: color of the object
+// meshVisible: whether the object's collision mesh is visible
+// isPlayer: whether the object is the player (only one object can be the player)
+function loadObj({
+  file,
+  bbDimensions,
+  bbOffset = new THREE.Vector3(),
+  position = new THREE.Vector3(),
+  scale = new THREE.Vector3(1, 1, 1),
+  rotation = new THREE.Euler(),
+  color = new THREE.Color(),
+  meshVisible = false,
+  isPlayer = false,
+}) {
+  loader.load(file, (object) => {
+    object.position.copy(position);
+    object.scale.copy(scale);
+    object.rotation.copy(rotation);
+  
+    object.traverse((child) => {
+      if (child.isMesh) {
+        child.geometry = mergeVertices(child.geometry);
+        child.material = new THREE.MeshPhongMaterial({ color });
+        child.castShadow = true;
+        child.receiveShadow = true;
+      }
+    });
+  
+    const collisionMesh = new THREE.Mesh(
+      new THREE.BoxGeometry(bbDimensions.x, bbDimensions.y, bbDimensions.z),
+      new THREE.MeshBasicMaterial({ wireframe: true })
+    );
+    collisionMesh.visible = meshVisible;
+    collisionMesh.position.copy(position).add(bbOffset);
+  
+    if (isPlayer) {
+      player = object;
+      playerCollisionMesh = collisionMesh;
+      scene.add(player);
+      scene.add(playerCollisionMesh);
+    } else {
+      scene.add(object);
+      scene.add(collisionMesh);
+      obstacles.push(collisionMesh);
+    }
+  
+    normalsMap.set(collisionMesh, getNormals(collisionMesh));
+    verticesMap.set(collisionMesh, getVertices(collisionMesh));
+  });
+}
+
+const boatBBDimensions = new THREE.Vector3(0.175, 0.15, 0.5);
+const boatBBOffset = new THREE.Vector3(-0.01, 0, -0.05); 
+const boatScale = new THREE.Vector3(0.001, 0.001, 0.001);
+const boatRotation = new THREE.Euler(-Math.PI / 2, 0, Math.PI / 2);
+const boatColor = new THREE.Color(0x8b4513);
+
+loadObj({
+  file: "boat.obj",
+  bbDimensions: boatBBDimensions,
+  bbOffset: boatBBOffset,
+  scale: boatScale,
+  rotation: boatRotation,
+  color: boatColor,
+  isPlayer: true,
+});
+
+loadObj({
+  file: "boat.obj",
+  bbDimensions: boatBBDimensions,
+  bbOffset: boatBBOffset,
+  position: generateRandomPosition(),
+  scale: boatScale,
+  rotation: boatRotation,
+  color: boatColor,
+});
+// **************************************************************************************************
+
+// **************************************************************************************************
+// *********************************** SAT COLLISION DETECTION **************************************
+// **************************************************************************************************
+function positiveVectorKey(vector) {
+  return `${Math.round(vector.x * 1000)},${Math.round(vector.y * 1000)},${Math.round(vector.z * 1000)}`;
+}
+
+function negativeVectorKey(vector) {
+  return `${Math.round(-vector.x * 1000)},${Math.round(-vector.y * 1000)},${Math.round(-vector.z * 1000)}`;
+}
+
+function getNormals(object) {
+  const normalsAttribute = object.geometry.getAttribute("normal");
+  const unique = new Set();
+  const normals = [];
+
+  object.updateMatrixWorld(true);
+
+  for (let i = 0; i < normalsAttribute.count; i++) {
+    tempVector.fromBufferAttribute(normalsAttribute, i).applyMatrix4(object.matrixWorld.invert().transpose()).normalize();
+    const positiveKey = positiveVectorKey(tempVector);
+    const negativeKey = negativeVectorKey(tempVector);
+    if (unique.has(positiveKey) || unique.has(negativeKey)) continue;
+    unique.add(positiveKey);
+    unique.add(negativeKey);
+    normals.push(tempVector.clone());
+  }
+
+  return normals;
+}
+
+function getVertices(object) {
+  const verticesAttribute = object.geometry.getAttribute("position");
+  const vertices = [];
+
+  for (let i = 0; i < verticesAttribute.count; i++) {
+    tempVector.fromBufferAttribute(verticesAttribute, i).applyMatrix4(object.matrixWorld);
+    vertices.push(tempVector.clone());
+  }
+
+  return vertices;
+}
+
+function checkCollision(playerCollisionMesh, obstacle) {
+  let minOverlap = Infinity;
+  let minAxis;
+
+  const allAxes = removeDuplicates([...normalsMap.get(playerCollisionMesh), ...normalsMap.get(obstacle)]);
+
+  for (const axis of allAxes) {
+    const projection1 = getProjection(playerCollisionMesh, axis);
+    const projection2 = getProjection(obstacle, axis);
+
+    if (projection1.max <= projection2.min || projection2.max <= projection1.min) return;
+
+    const overlap = Math.min(projection1.max - projection2.min, projection2.max - projection1.min);
+
+    if (overlap < minOverlap) {
+      minOverlap = overlap;
+      minAxis = axis;
+    }
+  }
+
+  return { minAxis, minOverlap };
+}
+
+function removeDuplicates(normals) {
+  const unique = new Set();
+
+  return normals.filter((normal) => {
+    const positiveKey = positiveVectorKey(normal);
+    const negativeKey = negativeVectorKey(normal);
+    if (unique.has(positiveKey) || unique.has(negativeKey)) return false;
+    unique.add(positiveKey);
+    unique.add(negativeKey);
+    return true;
+  });
+}
+
+function getProjection(object, axis) {
+  if (object === playerCollisionMesh) verticesMap.set(playerCollisionMesh, getVertices(playerCollisionMesh));
+
+  const vertices = verticesMap.get(object);
+  let min = Infinity;
+  let max = -Infinity;
+
+  for (const vertex of vertices) {
+    const dot = axis.dot(vertex);
+    min = Math.min(min, dot);
+    max = Math.max(max, dot);
+  }
+
+  return { min, max };
+}
+// **************************************************************************************************
+
+// **************************************************************************************************
+// *********************************** BOAT MOVEMENT ************************************************
+// **************************************************************************************************
+const keys = {
+  w: false,
+  s: false,
+  a: false,
+  d: false,
+  " ": false,
+  shift: false,
+};
+
+window.addEventListener("keydown", (e) => {
+  if (e.key.toLowerCase() in keys) keys[e.key.toLowerCase()] = true;
+});
+
+window.addEventListener("keyup", (e) => {
+  if (e.key.toLowerCase() in keys) keys[e.key.toLowerCase()] = false;
+});
+
+let boatVelocity = 0;
+let isRocking = false;
+let hasImmunity = false;
+const ACCELERATION = 0.002;
+const ROTATION_SPEED = 0.05;
+const VERTICAL_SPEED = 0.005;
+const FRICTION = 0.99;
+const COLLISION_CHECK_RADIUS = 1;
+const direction = new THREE.Vector3(0, 0, -1);
+const worldUp = new THREE.Vector3(0, 1, 0);
+const toObstacle = new THREE.Vector3();
+
+function animateRocking() {
+  isRocking = true;
+
+  let elapsedTime = 0;
+  const MS_PER_FRAME = 1000 / 120;
+  const ROCKING_DURATION = 1000;
+  const MAX_OFFSET = Math.PI / 6;
+  const DAMPING = 10;
+  const NUM_OSCILLATIONS = 5;
+  const IMMUNITY_DURATION = 1000;
+
+  const animation = setInterval(() => {
+    elapsedTime += MS_PER_FRAME;
+
+    const progress = elapsedTime / ROCKING_DURATION;
+    const offset = MAX_OFFSET * Math.exp(-DAMPING * progress) * Math.sin(2 * Math.PI * NUM_OSCILLATIONS * progress);
+    player.rotation.x = -Math.PI / 2 + offset;
+    playerCollisionMesh.rotation.x = offset;
+
+    if (elapsedTime >= ROCKING_DURATION / 3) {
+      clearInterval(animation);
+      isRocking = false;
+      hasImmunity = true;
+      
+      setTimeout(() => {
+        hasImmunity = false;
+      }, IMMUNITY_DURATION);
+    }
+  }, MS_PER_FRAME);
+}
+// **************************************************************************************************
 
 // **************************************************************************************************
 // *********************************** SET UP FLUID AND BOUNDARY ************************************
@@ -89,21 +428,27 @@ const phong_material = new THREE.MeshPhongMaterial({
 // PARAMETERS CONTROLLABLE IN GUI
 var params = {
     // FLUID VISULIZATION
-    point_radius: 0.01, // 0.05 nice visually
-    point_opacity: 0.7,
-    show_neighbor_search: true,
+    point_radius: 0.08, // 0.08 nice visually with Gaussian Sprite material
+    point_opacity: 0.6, // 0.6 nice visually
+    show_neighbor_search: false,
 
     // BOUNDARY VISUALIZATION
     boundary_point_size: 0.01,
     boundary_point_opacity: 1,
-    boundary_box_width: 1,
+    boundary_box_width: 0.8,
+    boundary_box_length: 1.4,
 
     // FLUID PROPERTIES    
     stiffness: 0.5,
-    viscosity: 400,             // unstable for > 500 --- mu in equations, viscosity of the fluid that resists velocity change
+    viscosity: 100,             // unstable for > 500 --- mu in equations, viscosity of the fluid that resists velocity change
     smoothing_radius: 0.1,      // <= 0.1 nicer looking
     grav_strength: 1.5,
     rest_density_factor: 1,    // unstable for < 2
+    
+    // BUOYANCY PROPERTIES
+    buoyancy_strength: 1,           // Multiplier for buoyancy force
+    buoyancy_sample_points: 10,      // Number of sample points to use to calculate the water level
+    show_water_level: false,        // Show the water level
 };
 
 // NUMBER OF POINTS
@@ -128,13 +473,60 @@ const BUFFER = 0.001; // Small buffer to prevent sticking to boundaries
 const DAMPING = 0.8;  // Velocity damping factor
 
 // POINT VISUALIZATION
-const fluid_point_geometry = new THREE.SphereGeometry(params.point_radius);
-const boundary_point_geometry = new THREE.BoxGeometry( params.boundary_point_size, params.boundary_point_size, params.boundary_point_size );
-const fluid_material = new THREE.MeshBasicMaterial({ color: 0x1AA9D0, opacity: params.point_opacity, transparent: true,});
-const boundary_material = new THREE.MeshBasicMaterial({ color: 0x00ff00, opacity: params.boundary_point_opacity, transparent: true,});
 
-const test_material = new THREE.MeshBasicMaterial({ color: 0xff0000, opacity: params.point_opacity, transparent: true,});
-const neighbor_material = new THREE.MeshBasicMaterial({ color: 0xffff00, opacity: params.point_opacity, transparent: true,});
+
+
+// // Try to render them as gaussians
+// const texture = createGaussianTexture();
+
+// const test_point_material = new THREE.PointsMaterial({
+//     size: 0.2,
+//     map: texture,
+//     transparent: true,
+//     depthWrite: false,  // Helps with blending
+//     blending: THREE.AdditiveBlending  // Makes overlapping particles glow
+// });
+
+// // let test_fluid_points = Array.from({length: 1000}, () => new THREE.Mesh(fluid_point_geometry, test_point_material));
+// const geometry = new THREE.BufferGeometry();
+
+// // create a simple square shape. We duplicate the top left and bottom right
+// // vertices because each vertex needs to appear once per triangle.
+// const vertices = new Float32Array( [
+// 	-1.0, -1.0,  1.0, // v0
+// ] );
+
+// // itemSize = 3 because there are 3 values (components) per vertex
+// geometry.setAttribute( 'position', new THREE.BufferAttribute( vertices, 3 ) );
+// const material = new THREE.MeshBasicMaterial( { color: 0xff0000 } );
+// const mesh = new THREE.Mesh( geometry, material );
+
+// // // INITIALIZE FLUID AND ADD TO SCENE
+// // for(let i=0; i<num_fluid_points; i++) {
+// //     test_fluid_points[i].position.set(Math.random()*0.3 + 0.6, Math.random()*0.4 + 0.2, Math.random()*0.5 + 0.1); // Set position to random in box (0,0,0) - (1,1,1)
+// // 	scene.add(test_fluid_points[i]);
+// // }
+
+// const test_geometry = new THREE.BufferGeometry();
+// const test_positions = new Float32Array(1000 * 3); // 1000 particles, each with x, y, z
+
+// // Fill positions with your SPH particle data
+// for (let i = 0; i < 1000; i++) {
+//     test_positions[i * 3] = Math.random() * 0.3; // x
+//     test_positions[i * 3 + 1] = Math.random() * 0.3; // y
+//     test_positions[i * 3 + 2] = Math.random() * 0.3; // z
+// }
+
+// test_geometry.setAttribute("position", new THREE.BufferAttribute(test_positions, 3));
+// const test_points = new THREE.Points(test_geometry, test_point_material);
+// scene.add(test_points);
+
+
+
+
+
+// const test_material = new THREE.MeshBasicMaterial({ color: 0xff0000, opacity: params.point_opacity, transparent: true,});
+// const neighbor_material = new THREE.MeshBasicMaterial({ color: 0xffff00, opacity: params.point_opacity, transparent: true,});
 
 // OTHER CONSTANTS
 const total_volume = 1 * 1 * 1; // volume of the box
@@ -143,15 +535,72 @@ const volume_per_particle = total_volume / num_fluid_points; // volume per parti
 // const boundary_density = 0.001; // effective density of boundary used for calculating boundary forces
 
 // SET UP BOUNDARY
-let boundary_geometry = new THREE.BoxGeometry( params.boundary_box_width, 1, 1 );
+let boundary_geometry = new THREE.BoxGeometry( params.boundary_box_width, 1, params.boundary_box_length );
 let boundary_wireframe = new THREE.WireframeGeometry( boundary_geometry );
 const line = new THREE.LineSegments( boundary_wireframe );
 line.material.depthTest = false;
 line.material.opacity = 0.5;
 line.material.transparent = true;
-line.position.set(params.boundary_box_width / 2,0.5,0.5);
+line.position.set(params.boundary_box_width / 2, 0.5, params.boundary_box_length / 2);
 scene.add( line );
 // **************************************************************************************************
+
+
+
+
+
+
+// *********************************************************************************
+// GEOMETRY AND MATERIAL
+// const fluid_point_geometry = new THREE.SphereGeometry(params.point_radius);
+const boundary_point_geometry = new THREE.BoxGeometry( params.boundary_point_size, params.boundary_point_size, params.boundary_point_size );
+// const fluid_material = new THREE.MeshBasicMaterial({ color: 0x1AA9D0, opacity: params.point_opacity, transparent: true,});
+const boundary_material = new THREE.MeshBasicMaterial({ color: 0x00ff00, opacity: params.boundary_point_opacity, transparent: true,});
+
+// INSTANTIATE THE POINTS
+// let fluid_points = Array.from({length: num_fluid_points}, () => new THREE.Mesh(fluid_point_geometry, fluid_material));
+let boundary_points = Array.from({length: num_boundary_particles}, () => new THREE.Mesh(boundary_point_geometry, boundary_material));
+
+// // INITIALIZE FLUID AND ADD TO SCENE
+// for(let i=0; i<num_fluid_points; i++) {
+//     fluid_points[i].position.set(Math.random()*0.3 + 0.6, Math.random()*0.4 + 0.2, Math.random()*0.5 + 0.1); // Set position to random in box (0,0,0) - (1,1,1)
+// 	scene.add(fluid_points[i]);
+// }
+
+
+
+// Create a shared material for all particles
+const gaussianTexture = createGaussianTexture();
+const fluid_material = new THREE.SpriteMaterial({
+    map: gaussianTexture,
+    color: "rgb(26, 169, 208)",//0x1AA9D0,
+    opacity: params.point_opacity,
+    transparent: true,
+    depthWrite: false,  // Avoid depth conflicts
+    blending: THREE.AdditiveBlending,  // Smooth blending between particles
+});
+
+// Create sprite-based fluid points
+let fluid_points = Array.from({ length: num_fluid_points }, () => new THREE.Sprite(fluid_material));
+
+// INITIALIZE FLUID AND ADD TO SCENE
+for (let i = 0; i < num_fluid_points; i++) {
+    fluid_points[i].scale.set(params.point_radius * 2, params.point_radius * 2, 1);  // Scale sprite to match sphere size
+    fluid_points[i].position.set(
+        Math.random() * 0.3 + 0.5,
+        Math.random() * 0.4 + 0.2,
+        Math.random() * 0.5 + 0.1
+    );
+    scene.add(fluid_points[i]);
+}
+
+
+// INITIALIZE BOUNDARY POINTS AND ADD TO SCENE
+const num_points_per_side = num_boundary_particles / 3;
+set_up_boundary_points(num_points_per_side, true)
+
+
+
 
 
 
@@ -163,10 +612,18 @@ const gui = new dat.GUI();
 
 // POINT VISUALIZATION
 const VisualsFolder = gui.addFolder('Fluid Visuals');
-VisualsFolder.add(params, "point_radius", 0.005, 0.1).name('Point Radius').onChange((newRadius) => {
-    fluid_points.forEach((sphere) => {
-        sphere.geometry.dispose(); // Dispose old geometry
-        sphere.geometry = new THREE.SphereGeometry(newRadius); // Create new geometry
+VisualsFolder.add(params, "point_radius", 0.005, 0.2).name('Point Radius').onChange((newRadius) => {
+//     fluid_points.forEach((sphere) => {
+//         sphere.geometry.dispose(); // Dispose old geometry
+//         sphere.geometry = new THREE.SphereGeometry(newRadius); // Create new geometry
+//     });
+// });
+    fluid_points.forEach((point) => {
+        point.scale.set(newRadius * 2, newRadius * 2, 1);  // Scale sprite to match sphere size
+
+        // point.geometry.dispose(); // Dispose old geometry
+        // fluid_material.
+        // point.geometry = new THREE.SphereGeometry(newRadius); // Create new geometry
     });
 });
 VisualsFolder.add(fluid_material, "opacity", 0, 1).name('Point Opacity');
@@ -178,49 +635,51 @@ VisualsFolder.open();
 const BoundaryFolder = gui.addFolder('Boundaries');
 BoundaryFolder.add(params, "boundary_box_width", 0.1, 1).name('Box Width').onChange((newSize) => { // initialize at max in GUI as I don't want to update hashing declaration yet
     line.geometry.dispose();
-    boundary_geometry = new THREE.BoxGeometry(newSize, 1, 1);
+    boundary_geometry = new THREE.BoxGeometry(newSize, 1, params.boundary_box_length);
     boundary_wireframe = new THREE.WireframeGeometry(boundary_geometry);
     line.geometry = boundary_wireframe;
-    line.position.set(newSize / 2, 0.5, 0.5);
-    set_up_boundary_points(num_points_per_side);
+    line.position.set(newSize / 2, 0.5, params.boundary_box_length / 2);
+    // set_up_boundary_points(num_points_per_side);
 });
-BoundaryFolder.add(params, "boundary_point_size", 0.001, 0.05).name('Point Size').onChange((newSize) => {
-    boundary_points.forEach((boundary_box) => {
-        boundary_box.geometry.dispose(); // Dispose old geometry
-        boundary_box.geometry = new THREE.BoxGeometry(newSize, newSize, newSize); // Create new geometry
-    });
+BoundaryFolder.add(params, "boundary_box_length", 0.1, 3).name('Box Length').onChange((newSize) => { // initialize at max in GUI as I don't want to update hashing declaration yet
+    line.geometry.dispose();
+    boundary_geometry = new THREE.BoxGeometry(params.boundary_box_width, 1, newSize);
+    boundary_wireframe = new THREE.WireframeGeometry(boundary_geometry);
+    line.geometry = boundary_wireframe;
+    line.position.set(params.boundary_box_width / 2, 0.5, newSize / 2);
+    // set_up_boundary_points(num_points_per_side);
 });
-BoundaryFolder.add(boundary_material, "opacity", 0, 1).name('Point Opacity');
+// BoundaryFolder.add(params, "boundary_point_size", 0.001, 0.05).name('Point Size').onChange((newSize) => {
+//     boundary_points.forEach((boundary_box) => {
+//         boundary_box.geometry.dispose(); // Dispose old geometry
+//         boundary_box.geometry = new THREE.BoxGeometry(newSize, newSize, newSize); // Create new geometry
+//     });
+// });
+// BoundaryFolder.add(boundary_material, "opacity", 0, 1).name('Point Opacity');
 BoundaryFolder.open();
 
 
 // FLUID PROPERTIES
 const FluidFolder = gui.addFolder('Fluid Properties');
 FluidFolder.add(params, 'stiffness', 0.05, 5).name('stiffness');
-FluidFolder.add(params, 'viscosity', 0, 2000).name('viscosity');
+FluidFolder.add(params, 'viscosity', 0, 700).name('viscosity');
 FluidFolder.add(params, 'smoothing_radius', 0.02, 0.5).name('smoothing_radius');
 FluidFolder.add(params, 'grav_strength', 0, 10).name('grav_strength');
 FluidFolder.add(params, 'rest_density_factor', 0.6, 5).name('Rest Density');
 FluidFolder.open();
+
+// BUOYANCY PROPERTIES
+const BuoyancyFolder = gui.addFolder('Buoyancy Properties');
+BuoyancyFolder.add(params, 'buoyancy_strength', 0.1, 5).name('Buoyancy Strength');
+BuoyancyFolder.add(params, 'buoyancy_sample_points', 1, 100).name('Sample Points').step(1);
+BuoyancyFolder.add(params, 'show_water_level').name('Show Water Level');
+BuoyancyFolder.open();
 // *********************************************************************************
 
 
 
 
-// *********************************************************************************
-// INSTANTIATE THE POINTS
-let fluid_points = Array.from({length: num_fluid_points}, () => new THREE.Mesh(fluid_point_geometry, fluid_material));
-let boundary_points = Array.from({length: num_boundary_particles}, () => new THREE.Mesh(boundary_point_geometry, boundary_material));
 
-// INITIALIZE FLUID AND ADD TO SCENE
-for(let i=0; i<num_fluid_points; i++) {
-    fluid_points[i].position.set(Math.random()*0.3 + 0.6, Math.random()*0.4 + 0.2, Math.random()*0.5 + 0.1); // Set position to random in box (0,0,0) - (1,1,1)
-	scene.add(fluid_points[i]);
-}
-
-// INITIALIZE BOUNDARY POINTS AND ADD TO SCENE
-const num_points_per_side = num_boundary_particles / 3;
-set_up_boundary_points(num_points_per_side, true)
 
 
 // **************************************************************************************************
@@ -230,6 +689,8 @@ set_up_boundary_points(num_points_per_side, true)
 let animation_time = 0;
 let dt;
 const clock = new THREE.Clock();
+let last_time_spatial_lookup_updated = -1;
+const update_delay = 0.1; // how long to wait before updating the spatial lookup array
 
 // ARRAYS
 let density = Array.from({length: num_points}, (v,i) => i < num_fluid_points ? 0 : rest_density()); // density of each point
@@ -261,31 +722,24 @@ function animate() {
     animation_time += dt; 
 
 
-    // *********** VISUALLY VERIFYING THAT THE NEIGHBOR SEARCH ALGORITHM WORKS ****************
     // Update the spatial_lookup array
-    update_spatial_lookup(); // DO THIS FOR EVERY FRAME
-
-    // first make all same color, then modify
-    for (let i=0; i<num_fluid_points; i++){ fluid_points[i].material = fluid_material; }
-
-    if (params.show_neighbor_search == true) {
-        const test_ind = 0;
-
-        // make test point red
-        fluid_points[test_ind].material = test_material;
-
-        // make neighbor points yellow
-        const test_point = fluid_points[test_ind].position.clone();
-        for (const neighbor_idx of get_neighbor_indices(test_point)){
-            if (neighbor_idx == test_ind) {continue;}
-            fluid_points[neighbor_idx].material = neighbor_material;
-        }
+    if (animation_time - last_time_spatial_lookup_updated > update_delay) {
+        update_spatial_lookup(); // DO THIS FOR EVERY FRAME ? pretty slow.. try doing every <last_time_spatial_lookup_updated> seconds
+        last_time_spatial_lookup_updated = animation_time;
     }
+    
+
+    // *********** VISUALLY VERIFYING THAT THE NEIGHBOR SEARCH ALGORITHM WORKS ****************
+    show_neighbor_searching();
     // **************************************************************************************** 
 
-    const current_positions = fluid_points.map(p => p.position.clone());
-    // i've seen computing density with predicted positions can be unstable, despite being accepeted method in literature. might need to test again later.
-    compute_density(current_positions);
+    // predict positions
+    for (let i = 0; i < num_fluid_points; i++) {
+        predicted_positions[i] = fluid_points[i].position.clone().add( velocity[i].clone().multiplyScalar(dt) );
+    }
+
+    // const current_positions = fluid_points.map(p => p.position.clone());
+    compute_density(predicted_positions);
 
     // compute total force on each FLUID particle (boundary particles stationary)
     for(let i=0; i<num_fluid_points; i++) {
@@ -297,9 +751,9 @@ function animate() {
         const dv0 = a_grav.clone().add(a_viscosity).multiplyScalar(dt); // .add(a_boundary)
         velocity[i].add( dv0 );
         velocity[i] = clamp_velocity(velocity[i]);
-        predicted_positions[i] = fluid_points[i].position.clone().add( velocity[i].clone().multiplyScalar(dt) );
+        // predicted_positions[i] = fluid_points[i].position.clone().add( velocity[i].clone().multiplyScalar(dt) );
 
-        compute_pressure_acceleration(i)
+        compute_pressure_acceleration(i, predicted_positions);
 
         // ------- update velocity ----------
         // fluid_points[i].position.sub( velocity[i].clone().multiplyScalar(dt) ); // go back to before prediction
@@ -325,6 +779,67 @@ function animate() {
         // all_points[i].position.y = (all_points[i].position.y + 1) % 1;
     }
     // current_positions = updated_positions;
+
+    if (playerCollisionMesh) {
+      if (keys.w && !isRocking) {
+        boatVelocity += ACCELERATION;
+        player.position.y -= VERTICAL_SPEED;
+        playerCollisionMesh.position.y -= VERTICAL_SPEED;
+      }
+      if (keys.s && !isRocking) {
+        boatVelocity -= ACCELERATION;
+        player.position.y -= VERTICAL_SPEED;
+        playerCollisionMesh.position.y -= VERTICAL_SPEED;
+      }
+      if (keys.a && !isRocking) {
+        player.rotation.z += ROTATION_SPEED;
+        playerCollisionMesh.rotation.y += ROTATION_SPEED;
+        direction.applyAxisAngle(worldUp, ROTATION_SPEED);
+        boatBBOffset.applyAxisAngle(worldUp, ROTATION_SPEED);
+      }
+      if (keys.d && !isRocking) {
+        player.rotation.z -= ROTATION_SPEED;
+        playerCollisionMesh.rotation.y -= ROTATION_SPEED;
+        direction.applyAxisAngle(worldUp, -ROTATION_SPEED);
+        boatBBOffset.applyAxisAngle(worldUp, -ROTATION_SPEED);
+      }
+      if (keys[" "] && !isRocking) {
+        player.position.y += VERTICAL_SPEED;
+        playerCollisionMesh.position.y += VERTICAL_SPEED;
+      }
+      if (keys.shift && !isRocking) {
+        player.position.y -= VERTICAL_SPEED;
+        playerCollisionMesh.position.y -= VERTICAL_SPEED;
+      }
+    
+      boatVelocity *= FRICTION;
+
+      const buoyancyForce = calculateBuoyancyForce(playerCollisionMesh.position, boatBBDimensions);
+      player.position.y += buoyancyForce.y * 0.001;
+      playerCollisionMesh.position.y += buoyancyForce.y * 0.001;
+
+      player.position.y -= params.grav_strength * 0.005;
+      playerCollisionMesh.position.y -= params.grav_strength * 0.005;
+    
+      player.position.addScaledVector(direction, boatVelocity);
+      playerCollisionMesh.position.copy(player.position).add(boatBBOffset);
+    
+      for (const obstacle of obstacles) {
+        toObstacle.subVectors(obstacle.position, playerCollisionMesh.position);
+        if (toObstacle.lengthSq() < COLLISION_CHECK_RADIUS * COLLISION_CHECK_RADIUS) {
+          const collision = checkCollision(playerCollisionMesh, obstacle);
+          if (collision) {
+            if (toObstacle.dot(collision.minAxis) > 0) collision.minAxis.negate();
+            player.position.addScaledVector(collision.minAxis, collision.minOverlap);
+            playerCollisionMesh.position.copy(player.position).add(boatBBOffset);
+            if (!isRocking && !hasImmunity) animateRocking();
+            boatVelocity = 0;
+          }
+        }
+      }
+    
+      controls.target.copy(player.position);
+    }
 }
 renderer.setAnimationLoop( animate );
 // **************************************************************************************************
@@ -374,6 +889,47 @@ function kernel2D_deriv(dist) {
 
 function rest_density() {
     return params.rest_density_factor * mass / volume_per_particle;
+}
+
+
+// const test_material = new THREE.MeshBasicMaterial({ color: 0xff0000, opacity: params.point_opacity, transparent: true,});
+// const neighbor_material = new THREE.MeshBasicMaterial({ color: 0xffff00, opacity: params.point_opacity, transparent: true,});
+
+const test_material = new THREE.SpriteMaterial({
+    map: gaussianTexture,
+    color: 0xff0000,  // Keep your fluid color
+    opacity: 1,
+    transparent: true,
+    depthWrite: false,  // Avoid depth conflicts
+    blending: THREE.AdditiveBlending,  // Smooth blending between particles
+});
+
+const neighbor_material = new THREE.SpriteMaterial({
+    map: gaussianTexture,
+    color: 0xffff00,  // Keep your fluid color
+    opacity: 1,
+    transparent: true,
+    depthWrite: false,  // Avoid depth conflicts
+    blending: THREE.AdditiveBlending,  // Smooth blending between particles
+});
+
+function show_neighbor_searching() {
+    // first make all same color, then modify
+    for (let i=0; i<num_fluid_points; i++){ fluid_points[i].material = fluid_material; }
+
+    if (params.show_neighbor_search == true) {
+        const test_ind = 0;
+
+        // make test point red
+        fluid_points[test_ind].material = test_material;
+
+        // make neighbor points yellow
+        const test_point = fluid_points[test_ind].position.clone();
+        for (const neighbor_idx of get_neighbor_indices(test_point)){
+            if (neighbor_idx == test_ind) {continue;}
+            fluid_points[neighbor_idx].material = neighbor_material;
+        }
+    }
 }
 
 // // density correction factor (one layer boundary) for a specified fluid particle
@@ -430,7 +986,13 @@ function compute_viscosity_force(particle_index){
         const velocity_diff = velocity[particle_index].clone().sub(velocity[j].clone());
         // params.viscosity_force.add( velocity_diff.multiplyScalar( 5 * kernel_deriv * mass_array[j] / density[j]) );
         // const grad_sq_v = velocity_diff.multiplyScalar(mass_array[j] / density[j] * Math.abs(kernel_deriv / Math.max(dist, min_separation)));
+        
+        // original lapalacian formulation
         viscosity_force.add(velocity_diff.multiplyScalar(- mass_array[j] / density[j] * Math.abs(kernel_deriv / Math.max(dist, min_separation)) * params.viscosity / density[particle_index]));
+    
+        // // simplified (linear) velocity smoothing - does not work much better
+        // const kernel = kernel2D( dist );
+        // viscosity_force.add( velocity_diff.multiplyScalar(- params.viscosity * mass_array[j] / density[j] * kernel / 100) );
     }
 
     // boundary contribution
@@ -484,16 +1046,18 @@ function compute_density(fluid_positions_arg) {
     }
 }
 
-function compute_pressure_acceleration(i) {
+function compute_pressure_acceleration(i, positions_array) {
     // PRESSURE FORCE: compute gradient of pressure to get acceleration due to pressure -- assumes equation of state p = k * (rho - rho_0)
     pressure_acceleration[i].set(0,0,0);
-    const current_position = fluid_points[i].position.clone();
+    // const current_position = fluid_points[i].position.clone();
+    const current_position = positions_array[i].clone();
 
     // fluid contribution
-    for (const j of get_neighbor_indices(current_position)){
+    for (const j of get_neighbor_indices(current_position)){ // ** may need to change get_neighbor_indices to calculate based on predicted positions
         if (j == i) {continue;}
 
-        const j_to_i = current_position.clone().sub(fluid_points[j].position.clone());
+        // const j_to_i = current_position.clone().sub(fluid_points[j].position.clone());
+        const j_to_i = current_position.clone().sub(positions_array[j].clone());
         const dist = j_to_i.length();
         const kernel_deriv = kernel2D_deriv( dist );
 
@@ -566,11 +1130,15 @@ function handleBoundaryCollisions(i) {
         fluid_points[i].position.z = 0 + BUFFER;
         velocity[i].z = Math.abs(velocity[i].z) * DAMPING;
     }
-    // z = 1
-    if (fluid_points[i].position.z > 1 - BUFFER) {
-        fluid_points[i].position.z = 1 - BUFFER;
+    // z = params.boundary_box_length
+    if (fluid_points[i].position.z > params.boundary_box_length - BUFFER) {
+        fluid_points[i].position.z = params.boundary_box_length - BUFFER;
         velocity[i].z = -Math.abs(velocity[i].z) * DAMPING;
     }
+    
+    // TRY PERIODIC BOUNDARY CONDITIONS - does not work well in neighbor lookup and would have to modify distance calculation in all calculate force functions
+    // fluid_points[i].position.z = (fluid_points[i].position.z + 1) % 1;
+    // fluid_points[i].position.x = (fluid_points[i].position.x + 1) % 1;
 }
 
 function set_up_boundary_points(num_points_per_side, add_to_scene = false){
@@ -595,6 +1163,32 @@ function set_up_boundary_points(num_points_per_side, add_to_scene = false){
     }
 }
 
+function calculateBuoyancyForce(boatPosition, boatDimensions) {
+  const waterHeight = calculateWaterHeight();
+  const boatBottomHeight = boatPosition.y - boatDimensions.y / 2;
+
+  if (params.show_water_level) {
+    waterLevelMesh.position.set(boatPosition.x, waterHeight, boatPosition.z);
+    waterLevelMesh.visible = true;
+  } else waterLevelMesh.visible = false;
+  
+  const baseArea = boatDimensions.x * boatDimensions.z;
+  const submergedDepth = Math.max(0, Math.min(waterHeight - boatBottomHeight, boatDimensions.y)); 
+  const submergedVolume = baseArea * submergedDepth;
+
+  const buoyancyMagnitude = rest_density() * params.grav_strength * submergedVolume * params.buoyancy_strength;
+  return new THREE.Vector3(0, buoyancyMagnitude, 0);
+}
+
+function calculateWaterHeight() {
+  const distances = fluid_points.sort((a, b) => a.position.distanceTo(playerCollisionMesh.position) - b.position.distanceTo(playerCollisionMesh.position));
+  const numSamples = Math.min(params.buoyancy_sample_points, distances.length);
+
+  let totalHeight = 0;
+  for (let i = 0; i < numSamples; i++) totalHeight += distances[i].position.y;
+
+  return totalHeight / numSamples;
+}
 
 // ******************************** EFFICIENT NEIGHBOR SEARCH FUNCTIONS ************************************
 // convert 3D position of point to integer coordinate of cell point lies in
@@ -652,6 +1246,7 @@ function addArrays(arr1, arr2) {
 }
 
 const offsets = [-1, 0, 1];
+const num_cells_if_boundary_length_1 = Math.ceil(1 / params.smoothing_radius);
 function get_neighbor_indices(sample_point) {
     let neighbor_indices = [];
     const rSq = params.smoothing_radius ** 2;
@@ -661,6 +1256,9 @@ function get_neighbor_indices(sample_point) {
             for (let dk = -1; dk <= 1; dk++) {
                 // find cell of sample point
                 const sample_cell_coords = addArrays(position_to_cell_coord(sample_point), [di, dj, dk]);
+                // // make sure cell coordinates obey periodic boundary conditions, where appropriate -- does not currently work
+                // sample_cell_coords[0] = (sample_cell_coords[0] + num_cells_if_boundary_length_1) % num_cells_if_boundary_length_1
+                // sample_cell_coords[2] = (sample_cell_coords[2] + num_cells_if_boundary_length_1) % num_cells_if_boundary_length_1 // search criterion for periodic boundary in z
                 const cell_key = get_LU_key_from_hash( hash_cell_coord(sample_cell_coords));
 
                 const start_ind = start_indices[cell_key];
@@ -670,7 +1268,19 @@ function get_neighbor_indices(sample_point) {
 
                     // check particle is within smoothing radius
                     const particle_ind = spatial_lookup[lookup_ind][0];
-                    const distSq = fluid_points[particle_ind].position.clone().sub(sample_point).lengthSq();
+                    // const distSq = fluid_points[particle_ind].position.clone().sub(sample_point).lengthSq(); // original
+                    const predicted_pos = predicted_positions[particle_ind].clone()
+                    const sample_to_predicted_vec = predicted_pos.sub(sample_point); // based on predicted positions
+                    const distSq = sample_to_predicted_vec.lengthSq();
+                    // const distSq_no_periodicity = sample_to_predicted_vec.lengthSq();
+
+                    // const z_offset = new THREE.Vector3(0,0,1);
+
+                    // const distSq_z_plus = (sample_to_predicted_vec.add(z_offset)).lengthSq();
+                    // const distSq_z_minus = (sample_to_predicted_vec.sub(z_offset)).lengthSq();
+
+                    // const distSq = Math.min(distSq_no_periodicity, distSq_z_plus, distSq_z_minus);
+
                     if (distSq <= rSq) {
                         neighbor_indices.push(particle_ind);
                     }
@@ -682,4 +1292,24 @@ function get_neighbor_indices(sample_point) {
 
 
     return neighbor_indices;
+}
+
+
+
+// Create a Gaussian texture for smooth blending
+function createGaussianTexture(size = 128) {
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d");
+
+    // Create a radial gradient
+    const gradient = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    gradient.addColorStop(0, "rgb(255, 255, 255)");
+    gradient.addColorStop(1, "rgba(255, 255, 255, 0)");
+
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, size, size);
+
+    return new THREE.CanvasTexture(canvas);
 }
