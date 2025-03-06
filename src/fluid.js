@@ -83,6 +83,48 @@ const phong_material = new THREE.MeshPhongMaterial({
 
 
 
+
+
+// **************************************************************************************************
+// *********************************** OBSTACLE OBJECTS IN SCENE ************************************
+// **************************************************************************************************
+
+// ARRAY OF OBSTACLE MESHES - used to calculate interactions with fluid based on obstacle positions
+let obstacle_objects_in_scene = []; // *** ADD ALL OBSTACLES CURRENTLY IN THE SCENE TO THIS ARRAY FOR FLUID TO INTERACT WITH IT
+
+
+// EXAMPLE OBSTACLES - generate some random boxes and control their movement with the keyboard
+const boxGeometry = new THREE.BoxGeometry(0.15, 0.4, 0.15);  
+const boxMaterial = new THREE.MeshBasicMaterial({
+    color: "rgb(255, 255, 255)",  
+    transparent: true,    
+    opacity: 0.4,        
+    side: THREE.DoubleSide, 
+});
+
+// Function to create a box at a random position
+function createBox(x, y, z) {
+    const box = new THREE.Mesh(boxGeometry, boxMaterial);
+    box.position.set(x, y, z);
+    scene.add(box);
+    obstacle_objects_in_scene.push(box);
+}
+
+// randomly enerate box obstacles within the given x and z range
+for (let i = 0; i < 20; i++) {
+    let randomX = Math.random() * 0.8;  // x between 0 and 0.8
+    let randomZ = Math.random() * (-40) - 1;  // z between -5 and -1
+    createBox(randomX, 0.2, randomZ);
+}
+// **************************************************************************************************
+
+
+
+
+
+
+
+
 // **************************************************************************************************
 // *********************************** SET UP FLUID AND BOUNDARY ************************************
 // **************************************************************************************************
@@ -105,6 +147,10 @@ var params = {
     smoothing_radius: 0.1,      // <= 0.1 nicer looking
     grav_strength: 1.5,
     rest_density_factor: 1,    // unstable for < 2
+
+    // OBJECTS THAT INTERACT WITH FLUID
+    object_interaction_strength: 0.2,
+    interaction_length_scale: 1,
 };
 
 // NUMBER OF POINTS
@@ -323,6 +369,12 @@ FluidFolder.add(params, 'smoothing_radius', 0.02, 0.5).name('smoothing_radius');
 FluidFolder.add(params, 'grav_strength', 0, 10).name('grav_strength');
 FluidFolder.add(params, 'rest_density_factor', 0.6, 5).name('Rest Density');
 FluidFolder.open();
+
+// OBJECT INTERACTION PROPERTIES
+const ObjectInteractionFolder = gui.addFolder('Object Interactions');
+ObjectInteractionFolder.add(params, 'object_interaction_strength', 0.01, 1).name('strength');
+ObjectInteractionFolder.add(params, 'interaction_length_scale', 0.5, 2).name('distance');
+ObjectInteractionFolder.open();
 // *********************************************************************************
 
 
@@ -396,8 +448,10 @@ function animate() {
         const a_grav = compute_gravity_force(fluid_points[i].position.clone()); // GRAVITATIONAL FORCE
         const a_viscosity = compute_viscosity_force(i); // viscosity FORCE
         // const a_boundary = compute_boundary_force(fluid_points[i].position.clone()); // BOUNDARY FORCE - try to enforce stronger boundary conditions
+        // determine forces due to interaction with objects
+        const a_object_interaction = compute_object_interaction_acceleration(i);
 
-        const dv0 = a_grav.clone().add(a_viscosity).multiplyScalar(dt); // .add(a_boundary)
+        const dv0 = a_grav.clone().add(a_viscosity.add(a_object_interaction)).multiplyScalar(dt); // .add(a_boundary)
         velocity[i].add( dv0 );
         velocity[i] = clamp_velocity(velocity[i]);
         // predicted_positions[i] = fluid_points[i].position.clone().add( velocity[i].clone().multiplyScalar(dt) );
@@ -434,25 +488,45 @@ renderer.setAnimationLoop( animate );
 
 
 
-// **************************************************************************************************
-// // event variable
-// let still = false;
-// let full_cubes_visible = true;
-// // TODO: Add event listener
-// window.addEventListener('keydown', onKeyPress); // onKeyPress is called each time a key is pressed
-// // Function to handle keypress
-// function onKeyPress(event) {
-//     switch (event.key) {
-//         case 's': // Note we only do this if s is pressed.
-//             still = !still;
-//             break;
-//         case 'w':
-//             full_cubes_visible = !full_cubes_visible;
-//             break;
-//         default:
-//             console.log(`Key ${event.key} pressed`);
-//     }
-// }
+// ************************************ KEYBOARD INTERACTION ****************************************
+const moveSpeed = 0.03;
+const keys = {}; // Object to track pressed keys
+
+// Listen for key presses
+document.addEventListener("keydown", (event) => {
+    keys[event.key] = true;
+});
+
+// Listen for key releases
+document.addEventListener("keyup", (event) => {
+    keys[event.key] = false;
+});
+
+// Function to smoothly update obstacle positions
+function updateObstacles() {
+    let moveX = 0;
+    let moveZ = 0;
+
+    if (keys["w"]) moveZ -= moveSpeed; // Move forward
+    if (keys["s"]) moveZ += moveSpeed; // Move backward
+    if (keys["a"]) moveX -= moveSpeed; // Move left
+    if (keys["d"]) moveX += moveSpeed; // Move right
+
+    // Apply movement to all obstacle objects
+    if (moveX !== 0 || moveZ !== 0) {
+        for (let i = 0; i < obstacle_objects_in_scene.length; i++) {
+            obstacle_objects_in_scene[i].position.x += moveX;
+            obstacle_objects_in_scene[i].position.z += moveZ;
+        }
+    }
+
+    requestAnimationFrame(updateObstacles); // Keep updating smoothly
+}
+
+// Start the movement update loop
+updateObstacles();
+
+
 // **************************************************************************************************
 
 
@@ -727,6 +801,36 @@ function handleBoundaryCollisions(i) {
     // TRY PERIODIC BOUNDARY CONDITIONS - does not work well in neighbor lookup and would have to modify distance calculation in all calculate force functions
     // fluid_points[i].position.z = (fluid_points[i].position.z + 1) % 1;
     // fluid_points[i].position.x = (fluid_points[i].position.x + 1) % 1;
+
+
+    // // Add box in middle of fluid
+    // const box_x_start = 0;
+    // const box_x_end = 0.2;
+
+    // if (fluid_points[i].position.x > box_x_start && fluid_points[i].position.x < box_x_end && fluid_points[i].position.z > box_x_start && fluid_points[i].position.z < box_x_end) {
+    //     // modify x value
+    //     if (fluid_points[i].position.x - box_x_start > box_x_end - fluid_points[i].position.x) {
+    //         // put velocity towards -x
+    //         fluid_points[i].position.x = box_x_start - BUFFER;
+    //         velocity[i].x = -Math.abs(velocity[i].x) * DAMPING;
+    //     }
+    //     else {
+    //         fluid_points[i].position.x = box_x_end + BUFFER;
+    //         velocity[i].x = Math.abs(velocity[i].x) * DAMPING;
+    //     }
+    //     // modify z value
+    //     if (fluid_points[i].position.z - box_x_start > box_x_end - fluid_points[i].position.z) {
+    //         fluid_points[i].position.z = box_x_start - BUFFER;
+    //         velocity[i].z = -Math.abs(velocity[i].z) * DAMPING;
+    //     }
+    //     else {
+    //         fluid_points[i].position.z = box_x_end + BUFFER;
+    //         velocity[i].z = Math.abs(velocity[i].z) * DAMPING;
+    //     }
+        
+    //     // all_points[i].position.x = 0 + BUFFER;
+    //     // velocity[i].x = velocity[i].x * 0.;
+    // }
 }
 
 function set_up_boundary_points(num_points_per_side, add_to_scene = false){
@@ -874,4 +978,23 @@ function createGaussianTexture(size = 128) {
     ctx.fillRect(0, 0, size, size);
 
     return new THREE.CanvasTexture(canvas);
+}
+
+
+function compute_object_interaction_acceleration(i) {
+    let return_force = new THREE.Vector3(0,0,0);
+    const simple_force = new THREE.Vector3(1,1,1);
+
+    for (let obj_ind = 0; obj_ind < obstacle_objects_in_scene.length; obj_ind++) {
+        const particle_position = fluid_points[i].position.clone();
+        let object_position = obstacle_objects_in_scene[obj_ind].position.clone();
+        object_position.y = particle_position.y;
+
+        const relative_position = particle_position.sub(object_position)
+        const dist = relative_position.length() / params.interaction_length_scale;
+
+        return_force.add( relative_position.normalize().multiplyScalar(params.object_interaction_strength * kernel2D(dist)) );
+    }
+
+    return return_force;
 }
