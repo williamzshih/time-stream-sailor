@@ -124,7 +124,9 @@ const swimmingPool = createSwimmingPool(2, 0.1, 1, 0.1);
 
 
 
-let playerCollisionMesh;
+// let playerCollisionMesh;
+let heart = null;
+let power = null;
 function loadObj({
     file,
     position = new THREE.Vector3(),
@@ -132,7 +134,7 @@ function loadObj({
     rotation = new THREE.Euler(),
     color = new THREE.Color(0x776947),
     copies = 0,
-    isPlayer = false,
+    type = "",
 }) {
     loader.load(file, (object) => {
 
@@ -142,9 +144,17 @@ function loadObj({
         object.rotation.copy(rotation);
         object.updateMatrixWorld(true);
         
-        if (isPlayer) {
+        if (type == "player") {
             boat = object;
         }
+        if (type == "heart") {
+            
+            heart = object;
+        }
+        if (type == "speed") {
+            power = object;
+        }
+
        
         let modelTemplate = null;
         object.traverse((child) => {
@@ -154,6 +164,7 @@ function loadObj({
                 child.material = new THREE.MeshPhongMaterial({ color });
                 child.castShadow = true;
                 child.receiveShadow = true;
+
 
                 const boundingBox = new THREE.Box3().setFromObject(child);
                 const size = new THREE.Vector3();
@@ -170,8 +181,6 @@ function loadObj({
                     1.5,
                     10,
                     0
-                    // THREE.MathUtils.randFloat(poolBoundaries.minZ*0.9, poolBoundaries.maxZ*0.9)
-                    // 1,0,0
                 );
                 clone.scale.copy(scale);
                 clone.rotation.copy(rotation);
@@ -179,13 +188,13 @@ function loadObj({
                 clone.receiveShadow = true;
                 // clone.visible = false;
         
-                if (!isPlayer) obstacles.push(clone); // Store obstacles properly
+                if (type == "obstacle") obstacles.push(clone); // Store obstacles properly
                 scene.add(clone); // Add each obstacle separately
             }
         } else {
             // 🚀 **For single objects, load normally**
             scene.add(object);
-            if (!isPlayer) obstacles.push(object);
+            if (type == "obstacle") obstacles.push(object);
         }
         
     });
@@ -204,25 +213,72 @@ const objectsToLoad = [
     color: new THREE.Color(0xb5823c), 
     // bbDimensions: new THREE.Vector3(2, 1, 4), // Bounding Box Size
     // bbOffset: new THREE.Vector3(0, 0.5, 0), // Offset if needed
-    isPlayer: true, // Mark the boat as the player
+    type: "player", // Mark the boat as the player
     // visible: true, // Show wireframe for debugging
 },
 {
-    file: "objects/head.obj",
+    file: "objects/hectagon.obj",
     position: new THREE.Vector3(1, 0, 0),
     scale: new THREE.Vector3(0.008, 0.008, 0.008),
     rotation: new THREE.Euler(-1.57, 0, 1.57),
     color: new THREE.Color(0xffe54f), 
     // bbDimensions: new THREE.Vector3(1, 1, 1),
     // bbOffset: new THREE.Vector3(0, 0.5, 0),
-    isPlayer: false,
+    type: "obstacle",
     copies : 8,
-}
+},
+{
+    file: "objects/heart.obj",
+    position: new THREE.Vector3(1, 10, 0.5),
+    scale: new THREE.Vector3(0.005, 0.005, 0.005),
+    rotation: new THREE.Euler(-1.57, 0, 1.57),
+    color: new THREE.Color(0xff0000), 
+    // bbDimensions: new THREE.Vector3(1, 1, 1),
+    // bbOffset: new THREE.Vector3(0, 0.5, 0),
+    type: "heart",
+    // copies : 8,
+},
+{
+    file: "objects/lightning.obj",
+    position: new THREE.Vector3(1, 10, 0),
+    scale: new THREE.Vector3(0.02, 0.02, 0.02),
+    rotation: new THREE.Euler(-1.57, 0, 1.57),
+    color: new THREE.Color(0xffff66), 
+    // bbDimensions: new THREE.Vector3(1, 1, 1),
+    // bbOffset: new THREE.Vector3(0, 0.5, 0),
+    type: "speed",
+    // copies : 8,
+},
 ];
 
 // 🎯 Load all objects
 objectsToLoad.forEach((obj) => loadObj(obj));
 
+
+
+
+
+let fps = 0.5;      //fill in ur fps(30) / 60
+let score = 0;
+let velocity = 0;
+let acceleration = 0.005 * fps;
+let friction = 0.93;
+let angularAcceleration = 0.02;
+let maxSpeed = 0.02;
+let direction = new THREE.Vector3(1, 0, 0); // Initial direction along x-axis
+const movement = { forward: false, brake: false, left: false, right: false, freeCamera: false };
+let boatLives = 10;
+let isImmune = false;
+let text = "3";
+setTimeout(() => {
+    text = "2";
+}, 1000);
+setTimeout(() => {
+    text = "1";
+}, 2000);
+setTimeout(() => {
+    text = "";
+}, 3000);
 
 function getUniqueRandomIntegers(count, min, max) {
     const uniqueNumbers = new Set();
@@ -234,9 +290,11 @@ function getUniqueRandomIntegers(count, min, max) {
 
 let numToSpawn = 0;
 let count = 0;
+let powerUP = "";
+let buffPos = 0;
 function respawnObstacles() {
+
     // Pick 4-8 obstacles to respawn
-    
     numToSpawn = THREE.MathUtils.randInt(5, 8);
     count = 0;
     console.log("new obstacles"+numToSpawn);
@@ -264,15 +322,36 @@ function respawnObstacles() {
 }
 numToSpawn = respawnObstacles();
 
+function handleBoatCollision() {
+    if (isImmune) return;
 
-let score = 0;
-let velocity = 0;
-let acceleration = 0.01;
-let friction = 0.93;
-let angularAcceleration = 0.02;
-let maxSpeed = 0.02;
-let direction = new THREE.Vector3(1, 0, 0); // Initial direction along x-axis
-const movement = { forward: false, brake: false, left: false, right: false, freeCamera: false };
+    boatLives--;
+    velocity = 0;
+    text = "START";
+    setTimeout(() => {
+        text = "";
+    }, 2000);
+    if (boatLives <= 0) {
+        text = "GAME OVER";
+        acceleration = 0;
+        angularAcceleration = 0;
+    } else{
+        text = "Ouch!";
+        document.getElementById("centerText").style.color = "red";
+        setTimeout(() => {
+            text = "";
+            document.getElementById("centerText").style.color = "white";
+        }, 2000);
+        
+    }
+
+    // Activate immunity for 3 seconds
+    isImmune = true;
+    setTimeout(() => {
+        isImmune = false;
+        // boat.material.color.set(0xb5823c); // Change back to brown
+    }, 2000);
+}
 
 
 window.addEventListener('keydown', (event) => {
@@ -335,6 +414,8 @@ function animate() {
         let movementZ = new THREE.Vector3(0, 0, movementVector.z); // Left/rightw
 
         // 🎯 Apply X-movement (forward/backward) to obstacles in reverse
+        heart.position.sub(movementX);
+        power.position.sub(movementX);
         obstacles.forEach((obstacle) => {
             obstacle.position.sub(movementX); // Move obstacles in opposite X direction
             
@@ -343,11 +424,35 @@ function animate() {
                 obstacle.position.copy(0,10,0);
                 score += 1;
                 count +=1;
-                if (count == numToSpawn)
+                if (count == numToSpawn){
                     numToSpawn = respawnObstacles();
                 // console.log(count, numToSpawn);
+
+                // spawn powerups
+                    const randomValue = Math.random(); // Random number between 0 and 1
+                    let rand = new THREE.Vector3(1.8, 0, Math.random()-0.5);
+                    console.log(rand);
+                    if (randomValue < 0.25) {
+                        heart.position.copy(rand);
+                    } else if (randomValue < 0.50) {
+                        power.position.copy(rand);
+                    } else {
+                        heart.position.copy(0,10,0);
+                        power.position.copy(0,10,0);
+                        // 50% chance (no power-up)
+                    }
+                }
+                    
+            
             }
             obstacle.updateMatrixWorld(true);  // Force update
+
+           
+            if (boat.position.distanceTo(obstacle.position) < 0.05) {    //simple position based collision detect
+                console.log("hit");
+                handleBoatCollision();
+            }
+            
         });
 
         
@@ -362,8 +467,15 @@ function animate() {
         // 🎯 **Update HUD Text**
         document.getElementById("directionText").innerText = 
         `Score: ${score}\n` +
-        `Position: (${boat.position.x.toFixed(2)}, ${boat.position.y.toFixed(2)}, ${boat.position.z.toFixed(2)})\n` +
-        `Velocity: ${velocity.toFixed(2)}`;
+        `Life: ${boatLives}\n` +
+        `${isImmune}\n` +
+        // `Position: (${boat.position.x.toFixed(2)}, ${boat.position.y.toFixed(2)}, ${boat.position.z.toFixed(2)})\n` +
+        `Velocity: ${(velocity*500).toFixed(2)}`;
+
+        // 🎯 **Update Centered Text**
+        // text = "start";
+        document.getElementById("centerText").innerText = text;
+        document.getElementById("centerText").style.display = text ? "block" : "none"; // Show if text is not empty
 
         // 🎥 **Handle Free Camera Mode**
         if (movement.freeCamera) {
