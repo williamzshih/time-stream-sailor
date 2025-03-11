@@ -25,6 +25,7 @@ import * as THREE from 'three';
 import * as dat from 'dat.gui'; // GUI
 import Stats from 'stats.js'; // FPS counter
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+import { color } from 'three/src/nodes/TSL.js';
 // import { compute, step } from 'three/tsl';
 
 
@@ -150,7 +151,13 @@ var params = {
 
 // NUMBER OF POINTS
 // in 3d max ~1500 with current smoothing radius of 0.1
-const water_color = "rgb(26, 169, 208)"; // vibrant water color: "rgb(26, 169, 208)"
+// const water_color = "rgb(26, 169, 208)"; // vibrant water color: "rgb(26, 169, 208)"
+var colorParams = { // note: make sure one value close to zero so not washed out with white
+    r: 0.06,
+    g: 0.65,
+    b: 0.5
+};
+// const water_color = `rgb(${colorParams.r * 255}, ${colorParams.g * 255}, ${colorParams.b * 255})`;
 const num_fluid_points = 1000; // number of points in the fluid // ***** NOTE in 2D: >30 FPS when <510 fluid points with no algorithmic acceleration. With algorithmic acceleration can do ~800
 const num_boundary_particles = 0; // number of points on the boundary
 const num_points = num_fluid_points + num_boundary_particles; // number of points in the fluid
@@ -248,6 +255,31 @@ line.material.transparent = true;
 line.position.set(params.boundary_box_width / 2, 0.5, params.boundary_box_length / 2);
 scene.add( line );
 
+
+const wall_color = "rgb(255, 218, 95)"; // Light brown color
+const wall_material = new THREE.MeshPhongMaterial({
+    color: wall_color,
+});
+
+// Create thick wall geometry (extends 5 units in x)
+const wall_geometry = new THREE.BoxGeometry(5, 0.6, 6); // (width, height, depth)
+
+// Left wall: extends from x = -5 to x = 0
+const leftWall = new THREE.Mesh(wall_geometry, wall_material);
+leftWall.position.set(-2.62, 0, 0); // Centered at -2.5 so it spans (-5 to 0)
+scene.add(leftWall);
+
+// Right wall: extends from x = 1 to x = 6
+const rightWall = new THREE.Mesh(wall_geometry, wall_material);
+rightWall.position.set(3.62, 0, 0); // Centered at 3.5 so it spans (1 to 6)
+scene.add(rightWall);
+
+// // Bottom wall
+// const bottomWall = new THREE.Mesh(wall_geometry, wall_material);
+// bottomWall.position.set(0.5, -0.6, 0); // Centered at 3.5 so it spans (1 to 6)
+// scene.add(bottomWall);
+
+
 // // ADD BASE COLOR OF WATER BELOW BOUNDING BOX
 // let base_water_box_geometry = new THREE.BoxGeometry( params.boundary_box_width, 0.01, 3 * params.boundary_box_length );
 // const base_water_material = new THREE.MeshBasicMaterial({
@@ -300,16 +332,17 @@ let boundary_points = Array.from({length: num_boundary_particles}, () => new THR
 
 
 // Create a shared material for all particles
-const gaussianTexture = createGaussianTexture();
+const gaussianTexture = createGaussianTexture(colorParams.r, colorParams.g, colorParams.b);
 const fluid_material = new THREE.SpriteMaterial({
     map: gaussianTexture,
-    color: water_color,//0x1AA9D0,
+    // color: water_color,
     opacity: params.point_opacity,
     transparent: true,
     depthWrite: false,  // Avoid depth conflicts
+    premultipliedAlpha: false,
     blending: THREE.AdditiveBlending,  // Smooth blending between particles
 });
-
+updateFluidColor();
 
 // Create sprite-based fluid points
 let fluid_points = Array.from({ length: num_fluid_points }, () => new THREE.Sprite(fluid_material));
@@ -403,14 +436,30 @@ VisualsFolder.add(params, "point_radius", 0.005, 0.2).name('Point Radius').onCha
 // });
     fluid_points.forEach((point) => {
         point.scale.set(newRadius * 2, newRadius * 2, 1);  // Scale sprite to match sphere size
-
-        // point.geometry.dispose(); // Dispose old geometry
-        // fluid_material.
-        // point.geometry = new THREE.SphereGeometry(newRadius); // Create new geometry
+    });
+    mirror_points.forEach((point) => {
+        point.scale.set(newRadius * 2, newRadius * 2, 1);  // Scale sprite to match sphere size
+    });
+    stationary_points.forEach((point) => {
+        point.scale.set(newRadius * 2, newRadius * 2, 1);  // Scale sprite to match sphere size
     });
 });
 VisualsFolder.add(fluid_material, "opacity", 0, 1).name('Point Opacity');
 VisualsFolder.add(params, 'show_neighbor_search').name('Show Neighbor Search?');
+
+// Function to update material color
+function updateFluidColor() {
+    const { r, g, b } = colorParams;
+    fluid_material.color.setRGB(r,g,b);
+    fluid_material.map = createGaussianTexture(r, g, b);
+    fluid_material.needsUpdate = true;
+}
+
+// Add RGB sliders to GUI
+VisualsFolder.add(colorParams, "r", 0, 1).name("fluid R").onChange(updateFluidColor);
+VisualsFolder.add(colorParams, "g", 0, 1).name("fluid G").onChange(updateFluidColor);
+VisualsFolder.add(colorParams, "b", 0, 1).name("fluid B").onChange(updateFluidColor);
+
 VisualsFolder.open();
 
 
@@ -589,10 +638,10 @@ function updateObstacles() {
     let moveX = 0;
     let moveZ = 0;
 
-    if (keys["w"]) moveZ -= moveSpeed; // Move forward
-    if (keys["s"]) moveZ += moveSpeed; // Move backward
-    if (keys["a"]) moveX -= moveSpeed; // Move left
-    if (keys["d"]) moveX += moveSpeed; // Move right
+    if (keys["ArrowUp"]) moveZ -= moveSpeed;     
+    if (keys["ArrowDown"]) moveZ += moveSpeed;   
+    if (keys["ArrowLeft"]) moveX -= moveSpeed;  
+    if (keys["ArrowRight"]) moveX += moveSpeed;
 
     // Apply movement to all obstacle objects
     if (moveX !== 0 || moveZ !== 0) {
@@ -610,6 +659,16 @@ updateObstacles();
 
 
 // **************************************************************************************************
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1045,20 +1104,25 @@ function get_neighbor_indices(sample_point) {
 
 
 // Create a Gaussian texture for smooth blending
-function createGaussianTexture(size = 128) {
+function createGaussianTexture(r, g, b, size = 128) {
     const canvas = document.createElement("canvas");
     canvas.width = size;
     canvas.height = size;
     const ctx = canvas.getContext("2d");
 
-    // Create a radial gradient
+
+    // const centerColor = "rgb(26, 169, 208)";
+    // const edgeColor = "rgba(26, 169, 208, 0)";
+
+    // // Convert RGB values to CSS color strings
+    // const r = colorParams.r;
+    const centerColor = `rgb(${r * 255}, ${g * 255}, ${b * 255})`;
+    const edgeColor = `rgba(${r * 255}, ${g * 255}, ${b * 255}, 0)`; // Fully transparent edges
+
+    // Create radial gradient
     const gradient = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-    // gradient.addColorStop(0, "rgb(255, 255, 255)");
-    // gradient.addColorStop(1, "rgba(255, 255, 255, 0)");
-    // gradient.addColorStop(0, "rgba(112, 255, 255, 0.5)");  // Light blue center (matches water color)
-    // gradient.addColorStop(1, "rgba(112, 255, 255, 0)");  // Fades to transparent
-    gradient.addColorStop(0, "rgb(26, 169, 208)");  // Light blue center (matches water color)
-    gradient.addColorStop(1, "rgba(26, 169, 208, 0)");
+    gradient.addColorStop(0, centerColor);  // Center color
+    gradient.addColorStop(1, edgeColor);    // Transparent edges
 
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, size, size);
