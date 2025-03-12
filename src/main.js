@@ -19,13 +19,12 @@
 // ********************************** SCENE SETUP + DEPENDENCIES **********************************
 // ************************************************************************************************
 // DEPENDENCIES
-import * as THREE from "three";
 import * as dat from "dat.gui"; // GUI
 import Stats from "stats.js"; // FPS counter
+import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader";
 import { mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
-import { mx_bilerp_0 } from "three/src/nodes/materialx/lib/mx_noise.js";
 (function () {
   var script = document.createElement("script");
   script.onload = function () {
@@ -40,7 +39,6 @@ import { mx_bilerp_0 } from "three/src/nodes/materialx/lib/mx_noise.js";
   document.head.appendChild(script);
 })();
 // Scene setup
-import { color } from "three/src/nodes/TSL.js";
 // import { compute, step } from 'three/tsl';
 
 const scene = new THREE.Scene();
@@ -1568,7 +1566,7 @@ function animate() {
     controls.target.copy(player.position);
   }
 
-  if (boat) {
+  if (boat && heart && power) {
     // BOAT MOVEMENT
     if (movement.left) {
       if (boat.rotation.z < 1) {
