@@ -58,18 +58,18 @@ const controls = new OrbitControls(camera, renderer.domElement);
 camera.position.set(0.5, 0.5, 3.);
 controls.target.set(0.5, 0, 1.5);
 
-// Rendering 3D axis
-const createAxisLine = (color, start, end) => {
-    const geometry = new THREE.BufferGeometry().setFromPoints([start, end]);
-    const material = new THREE.LineBasicMaterial({ color: color });
-    return new THREE.Line(geometry, material);
-};
-const xAxis = createAxisLine(0xff0000, new THREE.Vector3(0, 0, 0), new THREE.Vector3(3, 0, 0)); // Red
-const yAxis = createAxisLine(0x00ff00, new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 3, 0)); // Green
-const zAxis = createAxisLine(0x0000ff, new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, 3)); // Blue
-scene.add(xAxis);
-scene.add(yAxis);
-scene.add(zAxis);
+// // Rendering 3D axis
+// const createAxisLine = (color, start, end) => {
+//     const geometry = new THREE.BufferGeometry().setFromPoints([start, end]);
+//     const material = new THREE.LineBasicMaterial({ color: color });
+//     return new THREE.Line(geometry, material);
+// };
+// const xAxis = createAxisLine(0xff0000, new THREE.Vector3(0, 0, 0), new THREE.Vector3(3, 0, 0)); // Red
+// const yAxis = createAxisLine(0x00ff00, new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 3, 0)); // Green
+// const zAxis = createAxisLine(0x0000ff, new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, 3)); // Blue
+// scene.add(xAxis);
+// scene.add(yAxis);
+// scene.add(zAxis);
 
 
 // Setting up the lights
@@ -262,7 +262,7 @@ line.material.depthTest = false;
 line.material.opacity = 0.5;
 line.material.transparent = true;
 line.position.set(params.boundary_box_width / 2, 0.5, params.boundary_box_length / 2);
-scene.add( line );
+// scene.add( line );
 
 
 const wall_color = "rgb(255, 218, 95)"; // Light brown color
