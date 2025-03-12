@@ -180,7 +180,7 @@ function loadObj({
 let boatOffset = new THREE.Vector3(0.15, 0.02, 0)
 const objectsToLoad = [    //The boat, the heart, and the power-up
 {
-    file: "public/boat.obj",
+    file: "boat.obj",
     position: boatOffset,
     scale: new THREE.Vector3(0.0005, 0.0005, 0.0005),
     rotation: new THREE.Euler(-1.57, 0, 0),
@@ -188,7 +188,7 @@ const objectsToLoad = [    //The boat, the heart, and the power-up
     type: "player", // Mark the boat as the player
 },
 {
-    file: "public/heart.obj",
+    file: "heart.obj",
     position: new THREE.Vector3(1, 10, 0.5),
     scale: new THREE.Vector3(0.005, 0.005, 0.005),
     rotation: new THREE.Euler(-1.57, 0, 1.57),
@@ -196,7 +196,7 @@ const objectsToLoad = [    //The boat, the heart, and the power-up
     type: "heart",
 },
 {
-    file: "public/lightning.obj",
+    file: "lightning.obj",
     position: new THREE.Vector3(1, 10, 0),
     scale: new THREE.Vector3(0.02, 0.02, 0.02),
     rotation: new THREE.Euler(-1.57, 0, 1.57),
@@ -207,7 +207,7 @@ const objectsToLoad = [    //The boat, the heart, and the power-up
 
 const levelObstacles = [     //for each level, right now all just hectagons
     {
-        file: "public/hectagon.obj",      //acient egypt
+        file: "hectagon.obj",      //acient egypt
         position: new THREE.Vector3(1, 10, 0),
         scale: new THREE.Vector3(0.012, 0.012, 0.05),
         rotation: new THREE.Euler(-1.57, 0, 1.57),
@@ -216,7 +216,7 @@ const levelObstacles = [     //for each level, right now all just hectagons
         copies : 20,
     },
     {                                     //jurastic
-        file: "public/hectagon.obj",
+        file: "hectagon.obj",
         position: new THREE.Vector3(1, 10, 0),
         scale: new THREE.Vector3(0.012, 0.012, 0.05),
         rotation: new THREE.Euler(-1.57, 0, 1.57),
@@ -225,7 +225,7 @@ const levelObstacles = [     //for each level, right now all just hectagons
         copies : 20,
     },
     {                                    //dark ages
-        file: "public/hectagon.obj",
+        file: "hectagon.obj",
         position: new THREE.Vector3(1, 10, 0),
         scale: new THREE.Vector3(0.012, 0.012, 0.05),
         rotation: new THREE.Euler(-1.57, 0, 1.57),
@@ -234,7 +234,7 @@ const levelObstacles = [     //for each level, right now all just hectagons
         copies : 20,
     },
     {                                    //future-cyberpunk
-        file: "public/hectagon.obj",
+        file: "hectagon.obj",
         position: new THREE.Vector3(1, 10, 0),
         scale: new THREE.Vector3(0.012, 0.012, 0.05),
         rotation: new THREE.Euler(-1.57, 0, 1.57),
@@ -489,18 +489,18 @@ function animate() {
         }
 
         // 🎯 **Update HUD Text**
-        document.getElementById("directionText").innerText = 
-        `Life: ${boatLives}\n` +
-        `Level: ${level}\n` +
-        `Distance till exit: ${(levelTreshold-distanceTraveled).toFixed(1)}\n` 
-        ;
+        // document.getElementById("directionText").innerText = 
+        // `Life: ${boatLives}\n` +
+        // `Level: ${level}\n` +
+        // `Distance till exit: ${(levelTreshold-distanceTraveled).toFixed(1)}\n` 
+        // ;
 
         // 🎯 **Update Centered Text**
-        document.getElementById("centerText").innerText = text;
-        document.getElementById("centerText").style.display = text ? "block" : "none"; // Show if text is not empty
-        `Score: ${score}\n` +
-        `Position: (${boat.position.x.toFixed(2)}, ${boat.position.y.toFixed(2)}, ${boat.position.z.toFixed(2)})\n` +
-        `Velocity: ${velocity.toFixed(2)}`;
+        // document.getElementById("centerText").innerText = text;
+        // document.getElementById("centerText").style.display = text ? "block" : "none"; // Show if text is not empty
+        // `Score: ${score}\n` +
+        // `Position: (${boat.position.x.toFixed(2)}, ${boat.position.y.toFixed(2)}, ${boat.position.z.toFixed(2)})\n` +
+        // `Velocity: ${velocity.toFixed(2)}`;
 
         // 🎥 **Handle Free Camera Mode**   // could be deleted in the end
         if (movement.freeCamera) {
