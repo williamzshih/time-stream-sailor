@@ -180,7 +180,7 @@ function loadObj({
 let boatOffset = new THREE.Vector3(0.15, 0.02, 0)
 const objectsToLoad = [    //The boat, the heart, and the power-up
 {
-    file: "objects/boat.obj",
+    file: "public/boat.obj",
     position: boatOffset,
     scale: new THREE.Vector3(0.0005, 0.0005, 0.0005),
     rotation: new THREE.Euler(-1.57, 0, 0),
@@ -188,7 +188,7 @@ const objectsToLoad = [    //The boat, the heart, and the power-up
     type: "player", // Mark the boat as the player
 },
 {
-    file: "objects/heart.obj",
+    file: "public/heart.obj",
     position: new THREE.Vector3(1, 10, 0.5),
     scale: new THREE.Vector3(0.005, 0.005, 0.005),
     rotation: new THREE.Euler(-1.57, 0, 1.57),
@@ -196,7 +196,7 @@ const objectsToLoad = [    //The boat, the heart, and the power-up
     type: "heart",
 },
 {
-    file: "objects/lightning.obj",
+    file: "public/lightning.obj",
     position: new THREE.Vector3(1, 10, 0),
     scale: new THREE.Vector3(0.02, 0.02, 0.02),
     rotation: new THREE.Euler(-1.57, 0, 1.57),
@@ -207,7 +207,7 @@ const objectsToLoad = [    //The boat, the heart, and the power-up
 
 const levelObstacles = [     //for each level, right now all just hectagons
     {
-        file: "objects/hectagon.obj",      //acient egypt
+        file: "public/hectagon.obj",      //acient egypt
         position: new THREE.Vector3(1, 10, 0),
         scale: new THREE.Vector3(0.012, 0.012, 0.05),
         rotation: new THREE.Euler(-1.57, 0, 1.57),
@@ -216,7 +216,7 @@ const levelObstacles = [     //for each level, right now all just hectagons
         copies : 20,
     },
     {                                     //jurastic
-        file: "objects/hectagon.obj",
+        file: "public/hectagon.obj",
         position: new THREE.Vector3(1, 10, 0),
         scale: new THREE.Vector3(0.012, 0.012, 0.05),
         rotation: new THREE.Euler(-1.57, 0, 1.57),
@@ -225,7 +225,7 @@ const levelObstacles = [     //for each level, right now all just hectagons
         copies : 20,
     },
     {                                    //dark ages
-        file: "objects/hectagon.obj",
+        file: "public/hectagon.obj",
         position: new THREE.Vector3(1, 10, 0),
         scale: new THREE.Vector3(0.012, 0.012, 0.05),
         rotation: new THREE.Euler(-1.57, 0, 1.57),
@@ -234,7 +234,7 @@ const levelObstacles = [     //for each level, right now all just hectagons
         copies : 20,
     },
     {                                    //future-cyberpunk
-        file: "objects/hectagon.obj",
+        file: "public/hectagon.obj",
         position: new THREE.Vector3(1, 10, 0),
         scale: new THREE.Vector3(0.012, 0.012, 0.05),
         rotation: new THREE.Euler(-1.57, 0, 1.57),
