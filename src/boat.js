@@ -14,7 +14,7 @@ camera.position.set(0, 1, 0);
 const renderer = new THREE.WebGLRenderer();
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
-renderer.setClearColor(0x87ceeb);
+renderer.setClearColor(0x87ceeb);    //set the sky blue
 document.body.appendChild(renderer.domElement);
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
@@ -38,23 +38,6 @@ directionalLight.shadow.camera.top = 10;
 directionalLight.shadow.camera.bottom = -10;
 scene.add(directionalLight);
 
-// Create axis lines
-function createAxisLine(color, start, end) {
-  const geometry = new THREE.BufferGeometry().setFromPoints([start, end]);
-  const material = new THREE.LineBasicMaterial({ color: color });
-  return new THREE.Line(geometry, material);
-}
-// const xAxis = createAxisLine(0xff0000, new THREE.Vector3(0, 0, 0), new THREE.Vector3(5, 0, 0));
-// const yAxis = createAxisLine(0x00ff00, new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 5, 0));
-// const zAxis = createAxisLine(0x0000ff, new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, 5));
-// scene.add(xAxis);
-// scene.add(yAxis);
-// scene.add(zAxis);
-
-
-let obstacles = [];
-let boat = null; // Define boat globally
-const loader = new OBJLoader();
 
 let poolBoundaries = null;
 // Function to create a swimming pool-like structure
@@ -118,15 +101,20 @@ function createSwimmingPool(width, height, depth, wallThickness) {
     scene.add(poolMesh);
     return poolMesh;
 }
-// Create a pool with (width=50, height=20, depth=30, wall thickness=2)
-const swimmingPool = createSwimmingPool(2, 0.1, 1, 0.1);
+createSwimmingPool(3, 0.1, 1, 0.1);
 
 
 
 
-// let playerCollisionMesh;
+
+let obstacles = [];
+let boat = null; 
 let heart = null;
 let power = null;
+const loader = new OBJLoader();
+let unusedObstacles = [];
+let activeObstacles = [];
+
 function loadObj({
     file,
     position = new THREE.Vector3(),
@@ -137,23 +125,14 @@ function loadObj({
     type = "",
 }) {
     loader.load(file, (object) => {
-
-
         object.position.copy(position);
         object.scale.copy(scale);
         object.rotation.copy(rotation);
         object.updateMatrixWorld(true);
         
-        if (type == "player") {
-            boat = object;
-        }
-        if (type == "heart") {
-            
-            heart = object;
-        }
-        if (type == "speed") {
-            power = object;
-        }
+        if (type == "player") { boat = object;}
+        if (type == "heart") { heart = object; heart.visible = false;}
+        if (type == "speed") { power = object; power.visible = false;}
 
        
         let modelTemplate = null;
@@ -164,12 +143,6 @@ function loadObj({
                 child.material = new THREE.MeshPhongMaterial({ color });
                 child.castShadow = true;
                 child.receiveShadow = true;
-
-
-                const boundingBox = new THREE.Box3().setFromObject(child);
-                const size = new THREE.Vector3();
-                boundingBox.getSize(size);
-                console.log(size);
             }
         });
      
@@ -177,24 +150,25 @@ function loadObj({
             // 🚀 Create multiple separate objects instead of using InstancedMesh
             for (let i = 0; i < copies; i++) {
                 const clone = modelTemplate.clone(); // Clone the mesh
-                clone.position.set(
-                    1.5,
-                    10,
-                    0
-                );
+                clone.position.set( 0,10,0);
                 clone.scale.copy(scale);
                 clone.rotation.copy(rotation);
                 clone.castShadow = true;
                 clone.receiveShadow = true;
-                // clone.visible = false;
         
-                if (type == "obstacle") obstacles.push(clone); // Store obstacles properly
+                if (type == "obstacle") {
+                    obstacles.push(clone);
+                    unusedObstacles.push(clone);
+                } 
                 scene.add(clone); // Add each obstacle separately
             }
         } else {
             // 🚀 **For single objects, load normally**
             scene.add(object);
-            if (type == "obstacle") obstacles.push(object);
+            if (type == "obstacle") {
+                obstacles.push(object);
+                unusedObstacles.push(object);
+            } 
         }
         
     });
@@ -204,28 +178,14 @@ function loadObj({
 
 
 let boatOffset = new THREE.Vector3(0.15, 0.02, 0)
-const objectsToLoad = [
+const objectsToLoad = [    //The boat, the heart, and the power-up
 {
     file: "objects/boat.obj",
     position: boatOffset,
-    scale: new THREE.Vector3(0.0003, 0.0003, 0.0003),
+    scale: new THREE.Vector3(0.0005, 0.0005, 0.0005),
     rotation: new THREE.Euler(-1.57, 0, 0),
     color: new THREE.Color(0xb5823c), 
-    // bbDimensions: new THREE.Vector3(2, 1, 4), // Bounding Box Size
-    // bbOffset: new THREE.Vector3(0, 0.5, 0), // Offset if needed
     type: "player", // Mark the boat as the player
-    // visible: true, // Show wireframe for debugging
-},
-{
-    file: "objects/hectagon.obj",
-    position: new THREE.Vector3(1, 0, 0),
-    scale: new THREE.Vector3(0.008, 0.008, 0.008),
-    rotation: new THREE.Euler(-1.57, 0, 1.57),
-    color: new THREE.Color(0xffe54f), 
-    // bbDimensions: new THREE.Vector3(1, 1, 1),
-    // bbOffset: new THREE.Vector3(0, 0.5, 0),
-    type: "obstacle",
-    copies : 8,
 },
 {
     file: "objects/heart.obj",
@@ -233,10 +193,7 @@ const objectsToLoad = [
     scale: new THREE.Vector3(0.005, 0.005, 0.005),
     rotation: new THREE.Euler(-1.57, 0, 1.57),
     color: new THREE.Color(0xff0000), 
-    // bbDimensions: new THREE.Vector3(1, 1, 1),
-    // bbOffset: new THREE.Vector3(0, 0.5, 0),
     type: "heart",
-    // copies : 8,
 },
 {
     file: "objects/lightning.obj",
@@ -244,22 +201,58 @@ const objectsToLoad = [
     scale: new THREE.Vector3(0.02, 0.02, 0.02),
     rotation: new THREE.Euler(-1.57, 0, 1.57),
     color: new THREE.Color(0xffff66), 
-    // bbDimensions: new THREE.Vector3(1, 1, 1),
-    // bbOffset: new THREE.Vector3(0, 0.5, 0),
     type: "speed",
-    // copies : 8,
 },
 ];
 
+const levelObstacles = [     //for each level, right now all just hectagons
+    {
+        file: "objects/hectagon.obj",      //acient egypt
+        position: new THREE.Vector3(1, 10, 0),
+        scale: new THREE.Vector3(0.012, 0.012, 0.05),
+        rotation: new THREE.Euler(-1.57, 0, 1.57),
+        color: new THREE.Color(0xffe54f), 
+        type: "obstacle",
+        copies : 20,
+    },
+    {                                     //jurastic
+        file: "objects/hectagon.obj",
+        position: new THREE.Vector3(1, 10, 0),
+        scale: new THREE.Vector3(0.012, 0.012, 0.05),
+        rotation: new THREE.Euler(-1.57, 0, 1.57),
+        color: new THREE.Color(0x336600), 
+        type: "obstacle",
+        copies : 20,
+    },
+    {                                    //dark ages
+        file: "objects/hectagon.obj",
+        position: new THREE.Vector3(1, 10, 0),
+        scale: new THREE.Vector3(0.012, 0.012, 0.05),
+        rotation: new THREE.Euler(-1.57, 0, 1.57),
+        color: new THREE.Color(0x404040), 
+        type: "obstacle",
+        copies : 20,
+    },
+    {                                    //future-cyberpunk
+        file: "objects/hectagon.obj",
+        position: new THREE.Vector3(1, 10, 0),
+        scale: new THREE.Vector3(0.012, 0.012, 0.05),
+        rotation: new THREE.Euler(-1.57, 0, 1.57),
+        color: new THREE.Color(0xcc99ff), 
+        type: "obstacle",
+        copies : 20,
+    },
+]
+
 // 🎯 Load all objects
+loadObj(levelObstacles[0]);
 objectsToLoad.forEach((obj) => loadObj(obj));
 
 
 
 
 
-let fps = 0.5;      //fill in ur fps(30) / 60
-let score = 0;
+let fps = 0.5;      //fill in ur fps / 60, like if 30 -> 30/60 = 0.5
 let velocity = 0;
 let acceleration = 0.005 * fps;
 let friction = 0.93;
@@ -267,60 +260,86 @@ let angularAcceleration = 0.02;
 let maxSpeed = 0.02;
 let direction = new THREE.Vector3(1, 0, 0); // Initial direction along x-axis
 const movement = { forward: false, brake: false, left: false, right: false, freeCamera: false };
-let boatLives = 10;
+let boatLives = 3;
 let isImmune = false;
+let distanceTraveled = 0; 
+let level = 1;
 let text = "3";
-setTimeout(() => {
-    text = "2";
-}, 1000);
-setTimeout(() => {
-    text = "1";
-}, 2000);
-setTimeout(() => {
-    text = "";
-}, 3000);
+let levelTreshold = 30;
+setTimeout(() => {    text = "2";}, 1000);
+setTimeout(() => {    text = "1";}, 2000);
+setTimeout(() => {    text = "";}, 3000);
 
-function getUniqueRandomIntegers(count, min, max) {
-    const uniqueNumbers = new Set();
-    while (uniqueNumbers.size < count) {
-        uniqueNumbers.add(Math.floor(Math.random() * (max - min + 1)) + min);
-    }
-    return Array.from(uniqueNumbers);
-}
 
-let numToSpawn = 0;
-let count = 0;
-let powerUP = "";
-let buffPos = 0;
-function respawnObstacles() {
 
-    // Pick 4-8 obstacles to respawn
-    numToSpawn = THREE.MathUtils.randInt(5, 8);
-    count = 0;
-    console.log("new obstacles"+numToSpawn);
+function resetLevel() {
+    console.log(`Switching to Level ${level}`);
+
+    // 🎯 Reset player state
+    boatLives = 3;
+    velocity = 0;
+    distanceTraveled = 0;
     
-    const possibleZPositions = getUniqueRandomIntegers(numToSpawn, -5, 5);
-    console.log(possibleZPositions);
-    
-    // Shuffle obstacles and pick `numToSpawn`
-    let shuffledObstacles = [...obstacles].sort(() => Math.random() - 0.5);
-    let toRespawn = shuffledObstacles.slice(0, numToSpawn);
-    
-    let i = 0;
-    toRespawn.forEach((obstacle) => {
-        obstacle.position.set(1.8, 0, possibleZPositions[i]*0.1);
-        obstacle.visible = true;
-        i+= 1;
-    });
-
-    // Keep the rest invisible at (0,10,0)
-    shuffledObstacles.slice(numToSpawn).forEach((obstacle) => {
-        obstacle.position.set(0, 10, 0);
+    // 🎯 Clear current obstacles
+    activeObstacles.forEach(obstacle => {
         obstacle.visible = false;
+        scene.remove(obstacle);
     });
-    return numToSpawn;
+    unusedObstacles.forEach(obstacle => scene.remove(obstacle));
+
+    activeObstacles = [];
+    unusedObstacles = [];
+    obstacles = [];
+
+    // 🎯 Load new obstacles based on level
+    loadObj(levelObstacles[level-1]);
+
+    // 🎯 Change environment settings (placeholder)
+    // let envConfig = levelEnvironmentConfigs[level] || levelEnvironmentConfigs[1];
+    // document.body.style.backgroundImage = `url('textures/${envConfig.background}')`; // Example of changing background
+    // console.log(`Water color changed to: ${envConfig.waterColor}`);
+
+    text = `LEVEL ${level}`;
+    setTimeout(() => { text = ""; }, 2000);
 }
-numToSpawn = respawnObstacles();
+
+function respawnObstacles() {
+    if (unusedObstacles.length <= 10) return; // Prevent excessive spawning
+
+    let numToSpawn = THREE.MathUtils.randInt(5, 10); // Decide how many to spawn
+    console.log(`Spawning ${numToSpawn} obstacles`);
+
+    
+    for (let i = 0; i < numToSpawn; i++) {
+        if (unusedObstacles.length === 0) break; // Safety check
+
+        let obstacle = unusedObstacles.pop(); // Get an obstacle from the pool
+        obstacle.position.set(
+            THREE.MathUtils.randFloat(3, 8), // X position far away
+            0, // Y stays the same
+            THREE.MathUtils.randFloat(-0.5, 0.5) // Z is randomized
+        );
+        obstacle.visible = true;
+        activeObstacles.push(obstacle);
+    }
+    // 🎯 Randomly decide to spawn a power-up (1/4 chance each)
+    const spawnChance = Math.random();
+    let powerUpPos = new THREE.Vector3(
+        THREE.MathUtils.randFloat(3, 8), // X position far away
+        0, // Y stays the same
+        THREE.MathUtils.randFloat(-0.5, 0.5) // Z is randomized
+    );
+
+    if (spawnChance < 0.25 && !heart.visible) {
+        
+        heart.position.copy(powerUpPos);
+        heart.visible = true;
+    } else if (spawnChance < 0.50 && !heart.visible) {
+        power.position.copy(powerUpPos);
+        power.visible = true;
+    }
+}
+
 
 function handleBoatCollision() {
     if (isImmune) return;
@@ -342,9 +361,7 @@ function handleBoatCollision() {
             text = "";
             document.getElementById("centerText").style.color = "white";
         }, 2000);
-        
     }
-
     // Activate immunity for 3 seconds
     isImmune = true;
     setTimeout(() => {
@@ -378,20 +395,19 @@ window.addEventListener('keyup', (event) => {
     // if (event.key === ' ') movement.freeCamera = !movement.freeCamera; 
 });
 
-// console.log(obstacles);
+
 // Animation loop
 function animate() {
     requestAnimationFrame(animate);
      
 
     if (boat) {
-        // Update rotation for turning
+        // BOAT MOVEMENT
         if (movement.left) {
             if (boat.rotation.z < 1){
                 boat.rotation.z += angularAcceleration;
                 direction.applyAxisAngle(new THREE.Vector3(0, 1, 0), angularAcceleration);
             }
-            
         }
         if (movement.right) {
             if (boat.rotation.z > -1){
@@ -399,89 +415,93 @@ function animate() {
                 direction.applyAxisAngle(new THREE.Vector3(0, 1, 0), -angularAcceleration);
             }
         }
-
-        // Update speed and movement in the direction boat is facing
         if (movement.forward) velocity = Math.min(velocity + acceleration, maxSpeed);
         if (movement.brake) velocity *= friction;
         if (!movement.forward && !movement.brake) {
             velocity *= friction; // Apply friction only when no input is given
         }
-
         let movementVector = direction.clone().multiplyScalar(velocity);
-        
         // 🎯 Split movement into X and Z components
         let movementX = new THREE.Vector3(movementVector.x, 0, 0); // Forward/backward
-        let movementZ = new THREE.Vector3(0, 0, movementVector.z); // Left/rightw
+        let movementZ = new THREE.Vector3(0, 0, movementVector.z); // Left/rightw        
 
-        // 🎯 Apply X-movement (forward/backward) to obstacles in reverse
-        heart.position.sub(movementX);
-        power.position.sub(movementX);
-        obstacles.forEach((obstacle) => {
-            obstacle.position.sub(movementX); // Move obstacles in opposite X direction
-            
-            if (obstacle.position.x < 0) { // they are in the past
-                obstacle.visible = false;
-                obstacle.position.copy(0,10,0);
-                score += 1;
-                count +=1;
-                if (count == numToSpawn){
-                    numToSpawn = respawnObstacles();
-                // console.log(count, numToSpawn);
-
-                // spawn powerups
-                    const randomValue = Math.random(); // Random number between 0 and 1
-                    let rand = new THREE.Vector3(1.8, 0, Math.random()-0.5);
-                    console.log(rand);
-                    if (randomValue < 0.25) {
-                        heart.position.copy(rand);
-                    } else if (randomValue < 0.50) {
-                        power.position.copy(rand);
-                    } else {
-                        heart.position.copy(0,10,0);
-                        power.position.copy(0,10,0);
-                        // 50% chance (no power-up)
-                    }
-                }
-                    
-            
-            }
-            obstacle.updateMatrixWorld(true);  // Force update
-
-           
-            if (boat.position.distanceTo(obstacle.position) < 0.05) {    //simple position based collision detect
-                console.log("hit");
-                handleBoatCollision();
-            }
-            
-        });
-
-        
-        // 🎯 Apply Z-movement (left/right) to the boat itself
         let newBoatPosition = boat.position.clone().add(movementZ);
         newBoatPosition.z = THREE.MathUtils.clamp(newBoatPosition.z, poolBoundaries.minZ * 0.9, poolBoundaries.maxZ * 0.9);
         boat.position.copy(newBoatPosition);
 
-        
-   
+
+         // 🎯 Apply X-movement (forward/backward) to obstacles/objects in reverse
+         heart.position.sub(movementX);
+         power.position.sub(movementX);
+         for (let i = activeObstacles.length - 1; i >= 0; i--) {
+             let obstacle = activeObstacles[i]
+             obstacle.position.sub(movementX); // Move obstacles in opposite X direction
+             
+             if (obstacle.position.x < -0.5) { // If past the boat
+                 obstacle.visible = false;
+                 obstacle.position.set(0, 10, 0); // Hide it
+                 activeObstacles.splice(i, 1); // Remove from active list
+                 unusedObstacles.push(obstacle); // Add back to unused pool
+             }
+ 
+             obstacle.updateMatrixWorld(true);  // Force update
+ 
+             let detectionRange = 0.08;
+             if (boat.position.distanceTo(obstacle.position) < detectionRange) {    //simple position based collision detect
+                 console.log("hit");
+                 handleBoatCollision();
+             }
+         };
+
+        if (boat.position.distanceTo(heart.position) < 0.08) {
+            text = "Life+1";
+            setTimeout(() => {    text = "";}, 1000)
+            heart.position.set(0, 10, 0); // Hide it
+            heart.visible = false;
+            boatLives++; // 🎯 Increase life
+        }
+
+        if (boat.position.distanceTo(power.position) < 0.08) {
+            text = "Rush!!Just keep going forward!";
+            setTimeout(() => {    text = "";}, 10000)
+            power.position.set(0, 10, 0); // Hide it
+            power.visible = false;
+
+            // 🎯 Apply power-up effect
+            maxSpeed *= 2; // 🚀 Double acceleration
+            acceleration *= 2; // 🚀 Double acceleration
+            isImmune = true;
+            setTimeout(() => {
+                maxSpeed /= 2;
+                acceleration /=2;
+                isImmune = false;
+            }, 10000)
+        }
+        // 🎯 Detect Level
+        distanceTraveled+=movementX.x;
+        if (distanceTraveled >= levelTreshold) {
+            level++; // Increase level
+            resetLevel();    
+        }
+
+        if (unusedObstacles.length > 10) {
+            respawnObstacles();
+        }
 
         // 🎯 **Update HUD Text**
         document.getElementById("directionText").innerText = 
-        `Score: ${score}\n` +
         `Life: ${boatLives}\n` +
-        `${isImmune}\n` +
-        // `Position: (${boat.position.x.toFixed(2)}, ${boat.position.y.toFixed(2)}, ${boat.position.z.toFixed(2)})\n` +
-        `Velocity: ${(velocity*500).toFixed(2)}`;
+        `Level: ${level}\n` +
+        `Distance till exit: ${(levelTreshold-distanceTraveled).toFixed(1)}\n` 
+        ;
 
         // 🎯 **Update Centered Text**
-        // text = "start";
         document.getElementById("centerText").innerText = text;
         document.getElementById("centerText").style.display = text ? "block" : "none"; // Show if text is not empty
 
-        // 🎥 **Handle Free Camera Mode**
+        // 🎥 **Handle Free Camera Mode**   // could be deleted in the end
         if (movement.freeCamera) {
             // Move the camera to (0,10,0) and make it look at the boat
-            
-            
             camera.lookAt(boat.position);
         } else {
             // 🎯 **Make Camera Look Ahead in Boat’s Moving Direction**
