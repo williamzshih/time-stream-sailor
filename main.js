@@ -29,6 +29,27 @@ import { color } from 'three/src/nodes/TSL.js';
 // import { compute, step } from 'three/tsl';
 
 
+
+// // Function that waits for the spacebar press before continuing
+// async function waitForSpacebar() {
+//     return new Promise(resolve => {
+//         function onKeydown(event) {
+//             if (event.code === "Space") {
+//                 document.removeEventListener("keydown", onKeydown); // Remove listener
+//                 document.getElementById("startScreen").style.display = "none"; // Hide start screen
+//                 resolve(); // Resume execution
+//             }
+//         }
+//         document.addEventListener("keydown", onKeydown);
+//     });
+// }
+
+// // stops here until spacebar is pressed
+// await waitForSpacebar();
+
+
+
+
 const scene = new THREE.Scene();
 const loader = new THREE.TextureLoader();
 
@@ -58,18 +79,18 @@ const controls = new OrbitControls(camera, renderer.domElement);
 camera.position.set(0.5, 0.5, 3.);
 controls.target.set(0.5, 0, 1.5);
 
-// // Rendering 3D axis
-// const createAxisLine = (color, start, end) => {
-//     const geometry = new THREE.BufferGeometry().setFromPoints([start, end]);
-//     const material = new THREE.LineBasicMaterial({ color: color });
-//     return new THREE.Line(geometry, material);
-// };
-// const xAxis = createAxisLine(0xff0000, new THREE.Vector3(0, 0, 0), new THREE.Vector3(3, 0, 0)); // Red
-// const yAxis = createAxisLine(0x00ff00, new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 3, 0)); // Green
-// const zAxis = createAxisLine(0x0000ff, new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, 3)); // Blue
-// scene.add(xAxis);
-// scene.add(yAxis);
-// scene.add(zAxis);
+// Rendering 3D axis
+const createAxisLine = (color, start, end) => {
+    const geometry = new THREE.BufferGeometry().setFromPoints([start, end]);
+    const material = new THREE.LineBasicMaterial({ color: color });
+    return new THREE.Line(geometry, material);
+};
+const xAxis = createAxisLine(0xff0000, new THREE.Vector3(0, 0, 0), new THREE.Vector3(3, 0, 0)); // Red
+const yAxis = createAxisLine(0x00ff00, new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 3, 0)); // Green
+const zAxis = createAxisLine(0x0000ff, new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, 3)); // Blue
+scene.add(xAxis);
+scene.add(yAxis);
+scene.add(zAxis);
 
 
 // Setting up the lights
@@ -412,15 +433,15 @@ rightWallTop.position.set(3.5 + rock_wall_buffer, 0.3, 0);
 scene.add(rightWallTop);
 
 
-const leftWallSide = new THREE.Mesh(new THREE.PlaneGeometry(wallLength, wallHeight, 100, 100), rockMaterial_inner); // -> change side material for scrolling / tiling?
+const leftWallSide = new THREE.Mesh(new THREE.PlaneGeometry(wallLength, wallHeight + 1, 100, 100), rockMaterial_inner); // -> change side material for scrolling / tiling?
 leftWallSide.rotation.y = Math.PI / 2; // Face inwards
-leftWallSide.position.set(0 - rock_wall_buffer, 0, 0); // Align with side
+leftWallSide.position.set(0 - rock_wall_buffer, -0.5, 0); // Align with side
 scene.add(leftWallSide);
 
-const rightWallSide = new THREE.Mesh(new THREE.PlaneGeometry(wallLength, wallHeight, 100, 100), rockMaterial_inner);
+const rightWallSide = new THREE.Mesh(new THREE.PlaneGeometry(wallLength, wallHeight + 1, 100, 100), rockMaterial_inner);
 rightWallSide.rotation.y = -Math.PI / 2; // Face inwards
 rightWallSide.rotation.x = Math.PI; // Scroll in correct direction
-rightWallSide.position.set(1 + rock_wall_buffer, 0, 0);
+rightWallSide.position.set(1 + rock_wall_buffer, -0.5, 0);
 scene.add(rightWallSide);
 
 const bottomWall = new THREE.Mesh(new THREE.PlaneGeometry(wallDepth, wallLength, 100, 100), rockMaterial);
@@ -544,96 +565,6 @@ set_up_boundary_points(num_points_per_side, true)
 
 
 
-// ************************************************************************************
-// ****************************** GUI FOR TESTING VALUES ******************************
-// ************************************************************************************
-const gui = new dat.GUI();
-
-// POINT VISUALIZATION
-const VisualsFolder = gui.addFolder('Fluid Visuals');
-VisualsFolder.add(params, "point_radius", 0.005, 0.2).name('Point Radius').onChange((newRadius) => {
-//     fluid_points.forEach((sphere) => {
-//         sphere.geometry.dispose(); // Dispose old geometry
-//         sphere.geometry = new THREE.SphereGeometry(newRadius); // Create new geometry
-//     });
-// });
-    fluid_points.forEach((point) => {
-        point.scale.set(newRadius * 2, newRadius * 2, 1);  // Scale sprite to match sphere size
-    });
-    mirror_points.forEach((point) => {
-        point.scale.set(newRadius * 2, newRadius * 2, 1);  // Scale sprite to match sphere size
-    });
-    stationary_points.forEach((point) => {
-        point.scale.set(newRadius * 2, newRadius * 2, 1);  // Scale sprite to match sphere size
-    });
-});
-VisualsFolder.add(fluid_material, "opacity", 0, 1).name('Point Opacity');
-VisualsFolder.add(params, 'show_neighbor_search').name('Show Neighbor Search?');
-
-// Function to update material color
-function updateFluidColor() {
-    const { r, g, b } = colorParams;
-    fluid_material.color.setRGB(r,g,b);
-    fluid_material.map = createGaussianTexture(r, g, b);
-    fluid_material.needsUpdate = true;
-}
-
-// Add RGB sliders to GUI
-VisualsFolder.add(colorParams, "r", 0, 1).name("fluid R").onChange(updateFluidColor);
-VisualsFolder.add(colorParams, "g", 0, 1).name("fluid G").onChange(updateFluidColor);
-VisualsFolder.add(colorParams, "b", 0, 1).name("fluid B").onChange(updateFluidColor);
-
-VisualsFolder.open();
-
-
-// BOUNDARY VISUALIZATION
-const BoundaryFolder = gui.addFolder('Boundaries');
-BoundaryFolder.add(params, "boundary_box_width", 0.1, 1).name('Box Width').onChange((newSize) => { // initialize at max in GUI as I don't want to update hashing declaration yet
-    line.geometry.dispose();
-    boundary_geometry = new THREE.BoxGeometry(newSize, 1, params.boundary_box_length);
-    boundary_wireframe = new THREE.WireframeGeometry(boundary_geometry);
-    line.geometry = boundary_wireframe;
-    line.position.set(newSize / 2, 0.5, params.boundary_box_length / 2);
-    // set_up_boundary_points(num_points_per_side);
-});
-BoundaryFolder.add(params, "boundary_box_length", 0.1, 3).name('Box Length').onChange((newSize) => { // initialize at max in GUI as I don't want to update hashing declaration yet
-    line.geometry.dispose();
-    boundary_geometry = new THREE.BoxGeometry(params.boundary_box_width, 1, newSize);
-    boundary_wireframe = new THREE.WireframeGeometry(boundary_geometry);
-    line.geometry = boundary_wireframe;
-    line.position.set(params.boundary_box_width / 2, 0.5, newSize / 2);
-    // set_up_boundary_points(num_points_per_side);
-});
-// BoundaryFolder.add(params, "boundary_point_size", 0.001, 0.05).name('Point Size').onChange((newSize) => {
-//     boundary_points.forEach((boundary_box) => {
-//         boundary_box.geometry.dispose(); // Dispose old geometry
-//         boundary_box.geometry = new THREE.BoxGeometry(newSize, newSize, newSize); // Create new geometry
-//     });
-// });
-// BoundaryFolder.add(boundary_material, "opacity", 0, 1).name('Point Opacity');
-BoundaryFolder.open();
-
-
-// FLUID PROPERTIES
-const FluidFolder = gui.addFolder('Fluid Properties');
-FluidFolder.add(params, 'stiffness', 0.05, 5).name('stiffness');
-FluidFolder.add(params, 'viscosity', 0, 700).name('viscosity');
-FluidFolder.add(params, 'smoothing_radius', 0.02, 0.5).name('smoothing_radius');
-FluidFolder.add(params, 'grav_strength', 0, 10).name('grav_strength');
-FluidFolder.add(params, 'rest_density_factor', 0.6, 5).name('Rest Density');
-FluidFolder.open();
-
-// OBJECT INTERACTION PROPERTIES
-const ObjectInteractionFolder = gui.addFolder('Object Interactions');
-ObjectInteractionFolder.add(params, 'object_interaction_strength', 0.01, 1).name('strength');
-ObjectInteractionFolder.add(params, 'interaction_length_scale', 0.5, 2).name('distance');
-ObjectInteractionFolder.open();
-// *********************************************************************************
-
-
-
-
-
 
 
 // **************************************************************************************************
@@ -737,7 +668,7 @@ function animate() {
     // current_positions = updated_positions;
     updateMirroredPoints();
 }
-renderer.setAnimationLoop( animate );
+// renderer.setAnimationLoop( animate );
 // **************************************************************************************************
 
 
@@ -1287,3 +1218,134 @@ function compute_object_interaction_acceleration(i) {
 
     return return_force;
 }
+
+
+
+
+
+
+
+
+// ************************************************************************************
+// ************************************************************************************
+// ADDITIONS SINCE MAKING START SCREEN
+    // replace HTML page
+    // delete GUI code
+    // paste all code below to the end of the document
+
+
+
+// Function to update material color
+function updateFluidColor() {
+    const { r, g, b } = colorParams;
+    fluid_material.color.setRGB(r,g,b);
+    fluid_material.map = createGaussianTexture(r, g, b);
+    fluid_material.needsUpdate = true;
+}
+
+// ************************************************************************************
+// ****************************** GUI FOR TESTING VALUES ******************************
+// ************************************************************************************
+function createGUI() {
+    const gui = new dat.GUI();
+
+    // POINT VISUALIZATION
+    const VisualsFolder = gui.addFolder('Fluid Visuals');
+    VisualsFolder.add(params, "point_radius", 0.005, 0.2).name('Point Radius').onChange((newRadius) => {
+    //     fluid_points.forEach((sphere) => {
+    //         sphere.geometry.dispose(); // Dispose old geometry
+    //         sphere.geometry = new THREE.SphereGeometry(newRadius); // Create new geometry
+    //     });
+    // });
+        fluid_points.forEach((point) => {
+            point.scale.set(newRadius * 2, newRadius * 2, 1);  // Scale sprite to match sphere size
+        });
+        mirror_points.forEach((point) => {
+            point.scale.set(newRadius * 2, newRadius * 2, 1);  // Scale sprite to match sphere size
+        });
+        stationary_points.forEach((point) => {
+            point.scale.set(newRadius * 2, newRadius * 2, 1);  // Scale sprite to match sphere size
+        });
+    });
+    VisualsFolder.add(fluid_material, "opacity", 0, 1).name('Point Opacity');
+    VisualsFolder.add(params, 'show_neighbor_search').name('Show Neighbor Search?');
+
+
+    // Add RGB sliders to GUI
+    VisualsFolder.add(colorParams, "r", 0, 1).name("fluid R").onChange(updateFluidColor);
+    VisualsFolder.add(colorParams, "g", 0, 1).name("fluid G").onChange(updateFluidColor);
+    VisualsFolder.add(colorParams, "b", 0, 1).name("fluid B").onChange(updateFluidColor);
+
+    VisualsFolder.open();
+
+
+    // BOUNDARY VISUALIZATION
+    const BoundaryFolder = gui.addFolder('Boundaries');
+    BoundaryFolder.add(params, "boundary_box_width", 0.1, 1).name('Box Width').onChange((newSize) => { // initialize at max in GUI as I don't want to update hashing declaration yet
+        line.geometry.dispose();
+        boundary_geometry = new THREE.BoxGeometry(newSize, 1, params.boundary_box_length);
+        boundary_wireframe = new THREE.WireframeGeometry(boundary_geometry);
+        line.geometry = boundary_wireframe;
+        line.position.set(newSize / 2, 0.5, params.boundary_box_length / 2);
+        // set_up_boundary_points(num_points_per_side);
+    });
+    BoundaryFolder.add(params, "boundary_box_length", 0.1, 3).name('Box Length').onChange((newSize) => { // initialize at max in GUI as I don't want to update hashing declaration yet
+        line.geometry.dispose();
+        boundary_geometry = new THREE.BoxGeometry(params.boundary_box_width, 1, newSize);
+        boundary_wireframe = new THREE.WireframeGeometry(boundary_geometry);
+        line.geometry = boundary_wireframe;
+        line.position.set(params.boundary_box_width / 2, 0.5, newSize / 2);
+        // set_up_boundary_points(num_points_per_side);
+    });
+    // BoundaryFolder.add(params, "boundary_point_size", 0.001, 0.05).name('Point Size').onChange((newSize) => {
+    //     boundary_points.forEach((boundary_box) => {
+    //         boundary_box.geometry.dispose(); // Dispose old geometry
+    //         boundary_box.geometry = new THREE.BoxGeometry(newSize, newSize, newSize); // Create new geometry
+    //     });
+    // });
+    // BoundaryFolder.add(boundary_material, "opacity", 0, 1).name('Point Opacity');
+    BoundaryFolder.open();
+
+
+    // FLUID PROPERTIES
+    const FluidFolder = gui.addFolder('Fluid Properties');
+    FluidFolder.add(params, 'stiffness', 0.05, 5).name('stiffness');
+    FluidFolder.add(params, 'viscosity', 0, 700).name('viscosity');
+    FluidFolder.add(params, 'smoothing_radius', 0.02, 0.5).name('smoothing_radius');
+    FluidFolder.add(params, 'grav_strength', 0, 10).name('grav_strength');
+    FluidFolder.add(params, 'rest_density_factor', 0.6, 5).name('Rest Density');
+    FluidFolder.open();
+
+    // OBJECT INTERACTION PROPERTIES
+    const ObjectInteractionFolder = gui.addFolder('Object Interactions');
+    ObjectInteractionFolder.add(params, 'object_interaction_strength', 0.01, 1).name('strength');
+    ObjectInteractionFolder.add(params, 'interaction_length_scale', 0.5, 2).name('distance');
+    ObjectInteractionFolder.open();
+    // *********************************************************************************
+}
+
+
+
+// ******************************** STARTING SCREEN ********************************
+let gameStarted = false;
+
+// Function to initialize the game (called when spacebar is pressed)
+function startGame() {
+    if (gameStarted) return;
+    gameStarted = true;
+
+    // Hide the start screen
+    document.getElementById("startScreen").style.display = "none";
+    
+    
+    renderer.setAnimationLoop( animate );
+    createGUI();
+}
+
+// Listen for spacebar to start the game
+document.addEventListener("keydown", function(event) {
+    if (event.code === "Space") {
+        startGame();
+    }
+});
+// *********************************************************************************
