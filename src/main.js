@@ -27,10 +27,19 @@ import Stats from 'stats.js'; // FPS counter
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader';
 import { mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { color } from 'three/src/nodes/TSL.js';
 // import { compute, step } from 'three/tsl';
 
 
 const scene = new THREE.Scene();
+const loader = new THREE.TextureLoader();
+
+// background image
+loader.load('assets/background_image/light_trails_1.jpg', function (texture) {
+    texture.colorSpace = THREE.SRGBColorSpace
+    texture.minFilter = THREE.LinearFilter;
+    scene.background = texture;
+});
 
 //THREE.PerspectiveCamera( fov angle, aspect ratio, near depth, far depth );
 const camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
@@ -53,21 +62,21 @@ controls.maxDistance = 3;
 // camera.position.set(1.5, 1.5, 1.5);
 // controls.target.set(0, 0, 0);
 // 2D testing
-camera.position.set(0.6, 0.5, 1.7);
-controls.target.set(0.3, 0.1, 0);
+camera.position.set(0.5, 0.5, 3.);
+controls.target.set(0.5, 0, 1.5);
 
-// Rendering 3D axis
-const createAxisLine = (color, start, end) => {
-    const geometry = new THREE.BufferGeometry().setFromPoints([start, end]);
-    const material = new THREE.LineBasicMaterial({ color: color });
-    return new THREE.Line(geometry, material);
-};
-const xAxis = createAxisLine(0xff0000, new THREE.Vector3(0, 0, 0), new THREE.Vector3(3, 0, 0)); // Red
-const yAxis = createAxisLine(0x00ff00, new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 3, 0)); // Green
-const zAxis = createAxisLine(0x0000ff, new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, 3)); // Blue
-scene.add(xAxis);
-scene.add(yAxis);
-scene.add(zAxis);
+// // Rendering 3D axis
+// const createAxisLine = (color, start, end) => {
+//     const geometry = new THREE.BufferGeometry().setFromPoints([start, end]);
+//     const material = new THREE.LineBasicMaterial({ color: color });
+//     return new THREE.Line(geometry, material);
+// };
+// const xAxis = createAxisLine(0xff0000, new THREE.Vector3(0, 0, 0), new THREE.Vector3(3, 0, 0)); // Red
+// const yAxis = createAxisLine(0x00ff00, new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 3, 0)); // Green
+// const zAxis = createAxisLine(0x0000ff, new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, 3)); // Blue
+// scene.add(xAxis);
+// scene.add(yAxis);
+// scene.add(zAxis);
 
 
 // Setting up the lights
@@ -88,7 +97,7 @@ directionalLight.shadow.camera.top = 10;
 directionalLight.shadow.camera.bottom = -10;
 scene.add(directionalLight);
 
-const ambientLight = new THREE.AmbientLight(0x505050);  // Soft white light
+const ambientLight = new THREE.AmbientLight('rgb(178, 125, 1)', 4);  // Soft white light //0x505050
 scene.add(ambientLight);
 
 const phong_material = new THREE.MeshPhongMaterial({
@@ -176,7 +185,7 @@ for (let i = 0; i < NUM_OBSTACLES; i++) {
   verticesMap.set(obstacle, getVertices(obstacle));
 }
 
-const loader = new OBJLoader(); 
+const objLoader = new OBJLoader(); 
 let player; 
 let playerCollisionMesh; 
 
@@ -200,7 +209,7 @@ function loadObj({
   meshVisible = false,
   isPlayer = false,
 }) {
-  loader.load(file, (object) => {
+  objLoader.load(file, (object) => {
     object.position.copy(position);
     object.scale.copy(scale);
     object.rotation.copy(rotation);
@@ -427,6 +436,7 @@ function animateRocking() {
 // **************************************************************************************************
 // *********************************** OBSTACLE OBJECTS IN SCENE ************************************
 // **************************************************************************************************
+let animation_time = 0;
 
 // ARRAY OF OBSTACLE MESHES - used to calculate interactions with fluid based on obstacle positions
 let obstacle_objects_in_scene = []; // *** ADD ALL OBSTACLES CURRENTLY IN THE SCENE TO THIS ARRAY FOR FLUID TO INTERACT WITH IT
@@ -434,10 +444,10 @@ let obstacle_objects_in_scene = []; // *** ADD ALL OBSTACLES CURRENTLY IN THE SC
 
 // EXAMPLE OBSTACLES - generate some random boxes and control their movement with the keyboard
 const boxGeometry = new THREE.BoxGeometry(0.15, 0.4, 0.15);  
-const boxMaterial = new THREE.MeshBasicMaterial({
-    color: "rgb(255, 255, 255)",  
+const boxMaterial = new THREE.MeshPhongMaterial({
+    color: "rgb(197, 48, 48)",  
     transparent: true,    
-    opacity: 0.4,        
+    opacity: 1,        
     side: THREE.DoubleSide, 
 });
 
@@ -450,9 +460,9 @@ function createBox(x, y, z) {
 }
 
 // randomly enerate box obstacles within the given x and z range
-for (let i = 0; i < 20; i++) {
-    let randomX = Math.random() * 0.8;  // x between 0 and 0.8
-    let randomZ = Math.random() * (-40) - 1;  // z between -5 and -1
+for (let i = 0; i < 50; i++) {
+    let randomX = Math.random() * 1;  // x between 0 and 0.8
+    let randomZ = (Math.random() - 1) * 100; 
     createBox(randomX, 0.2, randomZ);
 }
 // **************************************************************************************************
@@ -470,21 +480,21 @@ for (let i = 0; i < 20; i++) {
 // PARAMETERS CONTROLLABLE IN GUI
 var params = {
     // FLUID VISULIZATION
-    point_radius: 0.08, // 0.08 nice visually with Gaussian Sprite material
-    point_opacity: 0.6, // 0.6 nice visually
+    point_radius: 0.12, // 0.08 nice visually with Gaussian Sprite material
+    point_opacity: 0.7, // 0.6 nice visually
     show_neighbor_search: false,
 
     // BOUNDARY VISUALIZATION
     boundary_point_size: 0.01,
     boundary_point_opacity: 1,
-    boundary_box_width: 0.8,
-    boundary_box_length: 1.4,
+    boundary_box_width: 1., // previously 0.8
+    boundary_box_length: 3., // previously 1.4
 
     // FLUID PROPERTIES    
-    stiffness: 0.5,
+    stiffness: 1.,         // previously 0.5
     viscosity: 100,             // unstable for > 500 --- mu in equations, viscosity of the fluid that resists velocity change
-    smoothing_radius: 0.1,      // <= 0.1 nicer looking
-    grav_strength: 1.5,
+    smoothing_radius: 0.15,      // <= 0.1 nicer looking
+    grav_strength: 1.5,         // previously 1.5
     rest_density_factor: 1,    // unstable for < 2
     
     // BUOYANCY PROPERTIES
@@ -493,12 +503,19 @@ var params = {
     show_water_level: false,        // Show the water level
 
     // OBJECTS THAT INTERACT WITH FLUID
-    object_interaction_strength: 0.2,
+    object_interaction_strength: 0.35, // previously 0.2
     interaction_length_scale: 1,
 };
 
 // NUMBER OF POINTS
 // in 3d max ~1500 with current smoothing radius of 0.1
+// const water_color = "rgb(26, 169, 208)"; // vibrant water color: "rgb(26, 169, 208)"
+var colorParams = { // note: make sure one value close to zero so not washed out with white
+    r: 0.04,
+    g: 0.65,
+    b: 0.5
+};
+// const water_color = `rgb(${colorParams.r * 255}, ${colorParams.g * 255}, ${colorParams.b * 255})`;
 const num_fluid_points = 1000; // number of points in the fluid // ***** NOTE in 2D: >30 FPS when <510 fluid points with no algorithmic acceleration. With algorithmic acceleration can do ~800
 const num_boundary_particles = 0; // number of points on the boundary
 const num_points = num_fluid_points + num_boundary_particles; // number of points in the fluid
@@ -513,7 +530,7 @@ const clamp_density = true; // aids in issue of density near free surface by ens
 
 // STABILITY CONTROLS (NON-GUI)
 const min_separation = 0.00005; // ** VERY IMPORTANT - minimum separation between particles to prevent division by zero
-const max_time_step = 1/60; // maximum time step for physics
+const max_time_step = 1/10; // maximum time step for physics
 const max_velocity = 3; // maximum velocity of fluid points for numerical stability
 const BUFFER = 0.001; // Small buffer to prevent sticking to boundaries
 const DAMPING = 0.8;  // Velocity damping factor
@@ -556,7 +573,7 @@ const DAMPING = 0.8;  // Velocity damping factor
 // const test_geometry = new THREE.BufferGeometry();
 // const test_positions = new Float32Array(1000 * 3); // 1000 particles, each with x, y, z
 
-// // Fill positions with your SPH particle data
+// // Fill positions with SPH particle data
 // for (let i = 0; i < 1000; i++) {
 //     test_positions[i * 3] = Math.random() * 0.3; // x
 //     test_positions[i * 3 + 1] = Math.random() * 0.3; // y
@@ -569,8 +586,6 @@ const DAMPING = 0.8;  // Velocity damping factor
 
 
 
-
-
 // const test_material = new THREE.MeshBasicMaterial({ color: 0xff0000, opacity: params.point_opacity, transparent: true,});
 // const neighbor_material = new THREE.MeshBasicMaterial({ color: 0xffff00, opacity: params.point_opacity, transparent: true,});
 
@@ -579,8 +594,16 @@ const total_volume = 1 * 1 * 1; // volume of the box
 const volume_per_particle = total_volume / num_fluid_points; // volume per particle
 // const rest_density = params.rest_density_factor * mass / volume_per_particle; // set rest density of the fluid so that it fills specified size in box
 // const boundary_density = 0.001; // effective density of boundary used for calculating boundary forces
+// **************************************************************************************************
 
-// SET UP BOUNDARY
+
+
+
+
+// **************************************************************************************************
+// *************************** OBJECT SETUP IN SCENE, INCLUDING BOUNDARY  ***************************
+// **************************************************************************************************
+// SET UP BOUNDARY BOX
 let boundary_geometry = new THREE.BoxGeometry( params.boundary_box_width, 1, params.boundary_box_length );
 let boundary_wireframe = new THREE.WireframeGeometry( boundary_geometry );
 const line = new THREE.LineSegments( boundary_wireframe );
@@ -588,8 +611,173 @@ line.material.depthTest = false;
 line.material.opacity = 0.5;
 line.material.transparent = true;
 line.position.set(params.boundary_box_width / 2, 0.5, params.boundary_box_length / 2);
-scene.add( line );
-// **************************************************************************************************
+// scene.add( line );
+
+
+const wall_color = "rgb(255, 218, 95)"; // Light brown color
+const wall_material = new THREE.MeshPhongMaterial({
+    color: wall_color,
+});
+
+
+
+// Load all texture maps
+const textureLoader = new THREE.TextureLoader();
+const rockDisplacementScale = 0.3; // how deep the rocks look
+
+const rockTextures = {
+    map: textureLoader.load('assets/damp-mossy-boulders-unity/damp-mossy-boulders_albedo.png'),
+    normalMap: textureLoader.load('assets/damp-mossy-boulders-unity/damp-mossy-boulders_normal-ogl.png'),
+    displacementMap: textureLoader.load('assets/damp-mossy-boulders-unity/damp-mossy-boulders_height.png'),
+    roughnessMap: textureLoader.load('assets/damp-mossy-boulders-unity/damp-mossy-boulders_metallic.psd'),
+    aoMap: textureLoader.load('assets/damp-mossy-boulders-unity/damp-mossy-boulders_ao.png'),
+};
+
+// Configure texture properties
+Object.values(rockTextures).forEach(texture => {
+    texture.wrapS = texture.wrapT = THREE.RepeatWrapping; // Allow infinite scrolling
+    texture.repeat.set(4, 4); // Adjust tiling
+});
+
+// Create rock material with depth effects
+const rockMaterial = new THREE.MeshStandardMaterial({
+    map: rockTextures.map,
+    normalMap: rockTextures.normalMap,
+    displacementMap: rockTextures.displacementMap,
+    displacementScale: rockDisplacementScale, // Controls depth intensity
+    displacementBias: 0, // Lowers the entire surface so it doesn't "float"
+    roughnessMap: rockTextures.roughnessMap,
+    aoMap: rockTextures.aoMap,
+});
+
+// CREATE SEPARATE TEXTURE FOR THE SIDE WALLS SO CAN SCROLL IN THE Z DIRECTION TOO
+const rockTextures_inner = {
+    map: textureLoader.load('assets/damp-mossy-boulders-unity-inner/damp-mossy-boulders_albedo.png'),
+    normalMap: textureLoader.load('assets/damp-mossy-boulders-unity-inner/damp-mossy-boulders_normal-ogl.png'),
+    displacementMap: textureLoader.load('assets/damp-mossy-boulders-unity-inner/damp-mossy-boulders_height.png'),
+    roughnessMap: textureLoader.load('assets/damp-mossy-boulders-unity-inner/damp-mossy-boulders_metallic.psd'),
+    aoMap: textureLoader.load('assets/damp-mossy-boulders-unity-inner/damp-mossy-boulders_ao.png'),
+};
+
+// Configure texture properties
+Object.values(rockTextures_inner).forEach(texture => {
+    texture.wrapS = texture.wrapT = THREE.RepeatWrapping; // Allow infinite scrolling
+    texture.repeat.set(4, 1); // Adjust tiling
+});
+
+// Create rock material with depth effects
+const rockMaterial_inner = new THREE.MeshStandardMaterial({
+    map: rockTextures_inner.map,
+    normalMap: rockTextures_inner.normalMap,
+    displacementMap: rockTextures_inner.displacementMap,
+    displacementScale: rockDisplacementScale, // Controls depth intensity
+    displacementBias: 0, // Lowers the entire surface so it doesn't "float"
+    roughnessMap: rockTextures_inner.roughnessMap,
+    aoMap: rockTextures_inner.aoMap,
+});
+
+
+function fadeDisplacementEdges(texturePath, callback) {
+    const image = new Image();
+    image.src = texturePath;
+    image.crossOrigin = "anonymous";
+
+    image.onload = function () {
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+
+        canvas.width = image.width;
+        canvas.height = image.height;
+        
+        // Draw the original heightmap
+        ctx.drawImage(image, 0, 0);
+
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = imageData.data;
+        const width = canvas.width;
+        const height = canvas.height;
+
+        // Apply a smooth fade to black near the edges
+        for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+                const index = (y * width + x) * 4;
+
+                // Compute normalized distance from center (for radial fade) or from edges
+                const edgeFade = Math.min(
+                    x / width, // Left fade
+                    (width - x) / width, // Right fade
+                    y / height, // Top fade
+                    (height - y) / height // Bottom fade
+                );
+
+                // Smoothly reduce intensity near edges
+                const fadeFactor = 1 - Math.pow(2 * edgeFade - 1, 2); // Exponent controls the smoothness of transition at edge
+                data[index] *= fadeFactor; // Red (height in grayscale)
+                data[index + 1] *= fadeFactor; // Green
+                data[index + 2] *= fadeFactor; // Blue
+            }
+        }
+
+        ctx.putImageData(imageData, 0, 0);
+
+        // Convert the modified canvas into a Three.js texture
+        const fadedTexture = new THREE.CanvasTexture(canvas);
+        fadedTexture.wrapS = THREE.RepeatWrapping;
+        fadedTexture.wrapT = THREE.RepeatWrapping;
+        fadedTexture.repeat.set(4, 4); // Adjust tiling
+        fadedTexture.needsUpdate = true;
+
+        callback(fadedTexture);
+    };
+}
+
+fadeDisplacementEdges("assets/damp-mossy-boulders-unity/damp-mossy-boulders_height.png", function(fadedTexture) {
+    rockMaterial.displacementMap = fadedTexture;
+    rockMaterial.displacementMap.needsUpdate = true;
+});
+
+fadeDisplacementEdges("assets/damp-mossy-boulders-unity-inner/damp-mossy-boulders_height.png", function(fadedTexture) {
+    rockMaterial_inner.displacementMap = fadedTexture;
+    rockMaterial_inner.displacementMap.needsUpdate = true;
+});
+
+
+const wallDepth = 5; // Thickness of wall extension
+const wallHeight = 0.6; // Height of walls (-0.3 to 0.3)
+const wallLength = 6; // Extends from z = -3 to z = 3
+
+
+// Create LEFT WALL (Top-facing and Side-facing)
+const rock_wall_buffer = rockDisplacementScale - 0.1;
+const leftWallTop = new THREE.Mesh(new THREE.PlaneGeometry(wallDepth, wallLength, 100, 100), rockMaterial);
+leftWallTop.rotation.x = -Math.PI / 2; // Face upwards
+leftWallTop.position.set(-2.5 - rock_wall_buffer, 0.3, 0); // Top of the wall
+scene.add(leftWallTop);
+
+// Create RIGHT WALL (Top-facing and Side-facing)
+const rightWallTop = new THREE.Mesh(new THREE.PlaneGeometry(wallDepth, wallLength, 100, 100), rockMaterial);
+rightWallTop.rotation.x = -Math.PI / 2; // Face upwards
+rightWallTop.position.set(3.5 + rock_wall_buffer, 0.3, 0);
+scene.add(rightWallTop);
+
+
+const leftWallSide = new THREE.Mesh(new THREE.PlaneGeometry(wallLength, wallHeight, 100, 100), rockMaterial_inner); // -> change side material for scrolling / tiling?
+leftWallSide.rotation.y = Math.PI / 2; // Face inwards
+leftWallSide.position.set(0 - rock_wall_buffer, 0, 0); // Align with side
+scene.add(leftWallSide);
+
+const rightWallSide = new THREE.Mesh(new THREE.PlaneGeometry(wallLength, wallHeight, 100, 100), rockMaterial_inner);
+rightWallSide.rotation.y = -Math.PI / 2; // Face inwards
+rightWallSide.rotation.x = Math.PI; // Scroll in correct direction
+rightWallSide.position.set(1 + rock_wall_buffer, 0, 0);
+scene.add(rightWallSide);
+
+const bottomWall = new THREE.Mesh(new THREE.PlaneGeometry(wallDepth, wallLength, 100, 100), rockMaterial);
+bottomWall.rotation.x = -Math.PI / 2; // Face upwards
+bottomWall.position.set(0.5, -0.3, 0);
+scene.add(bottomWall);
+
+// *********************************************************************************
 
 
 
@@ -616,15 +804,17 @@ let boundary_points = Array.from({length: num_boundary_particles}, () => new THR
 
 
 // Create a shared material for all particles
-const gaussianTexture = createGaussianTexture();
+const gaussianTexture = createGaussianTexture(colorParams.r, colorParams.g, colorParams.b);
 const fluid_material = new THREE.SpriteMaterial({
     map: gaussianTexture,
-    color: "rgb(26, 169, 208)",//0x1AA9D0,
+    // color: water_color,
     opacity: params.point_opacity,
     transparent: true,
     depthWrite: false,  // Avoid depth conflicts
+    premultipliedAlpha: false,
     blending: THREE.AdditiveBlending,  // Smooth blending between particles
 });
+updateFluidColor();
 
 // Create sprite-based fluid points
 let fluid_points = Array.from({ length: num_fluid_points }, () => new THREE.Sprite(fluid_material));
@@ -635,15 +825,67 @@ for (let i = 0; i < num_fluid_points; i++) {
     fluid_points[i].position.set(
         Math.random() * 0.3 + 0.5,
         Math.random() * 0.4 + 0.2,
-        Math.random() * 0.5 + 0.1
+        Math.random() * 1. + 1.5
     );
     scene.add(fluid_points[i]);
+}
+
+
+// STATIONARY POINTS THAT MAKE FLUID LOOK LIKE EXTENDS LONGER
+const num_below_box = 1000;
+const num_behind_box = 0;
+const numStationaryPoints = num_below_box + num_behind_box;
+const stationary_points = [];
+
+for (let i = 0; i < numStationaryPoints; i++) {
+    const sprite = new THREE.Sprite(fluid_material);
+    sprite.scale.set(params.point_radius * 2, params.point_radius * 2, 1);  // Scale sprite to match sphere size
+    
+    // Randomly distribute points within the given range
+    // below box
+    const x = Math.random() * 1;  
+    let y = Math.random() * 0.2 - 0.2; 
+    let z = Math.random() * 3; 
+
+    // behind box
+    if (i > num_below_box) { 
+        y = Math.random() * 0.2;  // -0.3 to 0
+        z = Math.random() * 6 - 6;  // 0 to 3
+    }
+
+    sprite.position.set(x, y, z);
+    
+    scene.add(sprite);
+    stationary_points.push(sprite);
+}
+
+
+// Create mirrored fluid points array
+let mirror_points = fluid_points.map(original => {
+    const mirrored = new THREE.Sprite(fluid_material);
+    mirrored.scale.set(params.point_radius * 2, params.point_radius * 2, 1);  // Scale sprite to match sphere size
+    mirrored.position.set(original.position.x, original.position.y, -original.position.z); // Mirror across z-axis
+    scene.add(mirrored);
+    return mirrored;
+});
+
+// Update mirrored positions every frame
+function updateMirroredPoints() {
+    for (let i = 0; i < fluid_points.length; i++) {
+        mirror_points[i].position.set(
+            fluid_points[i].position.x,
+            fluid_points[i].position.y,
+            -fluid_points[i].position.z // Mirror Z-axis
+        );
+    }
 }
 
 
 // INITIALIZE BOUNDARY POINTS AND ADD TO SCENE
 const num_points_per_side = num_boundary_particles / 3;
 set_up_boundary_points(num_points_per_side, true)
+// ************************************************************************************
+
 
 
 
@@ -666,14 +908,30 @@ VisualsFolder.add(params, "point_radius", 0.005, 0.2).name('Point Radius').onCha
 // });
     fluid_points.forEach((point) => {
         point.scale.set(newRadius * 2, newRadius * 2, 1);  // Scale sprite to match sphere size
-
-        // point.geometry.dispose(); // Dispose old geometry
-        // fluid_material.
-        // point.geometry = new THREE.SphereGeometry(newRadius); // Create new geometry
+    });
+    mirror_points.forEach((point) => {
+        point.scale.set(newRadius * 2, newRadius * 2, 1);  // Scale sprite to match sphere size
+    });
+    stationary_points.forEach((point) => {
+        point.scale.set(newRadius * 2, newRadius * 2, 1);  // Scale sprite to match sphere size
     });
 });
 VisualsFolder.add(fluid_material, "opacity", 0, 1).name('Point Opacity');
 VisualsFolder.add(params, 'show_neighbor_search').name('Show Neighbor Search?');
+
+// Function to update material color
+function updateFluidColor() {
+    const { r, g, b } = colorParams;
+    fluid_material.color.setRGB(r,g,b);
+    fluid_material.map = createGaussianTexture(r, g, b);
+    fluid_material.needsUpdate = true;
+}
+
+// Add RGB sliders to GUI
+VisualsFolder.add(colorParams, "r", 0, 1).name("fluid R").onChange(updateFluidColor);
+VisualsFolder.add(colorParams, "g", 0, 1).name("fluid G").onChange(updateFluidColor);
+VisualsFolder.add(colorParams, "b", 0, 1).name("fluid B").onChange(updateFluidColor);
+
 VisualsFolder.open();
 
 
@@ -738,7 +996,6 @@ ObjectInteractionFolder.open();
 // *********************************** GLOBAL VARIABLES TO UPDATE ***********************************
 // **************************************************************************************************
 // TIME
-let animation_time = 0;
 let dt;
 const clock = new THREE.Clock();
 let last_time_spatial_lookup_updated = -1;
@@ -772,6 +1029,7 @@ function animate() {
     // dt = clock.getDelta(); // get time since last frame
     dt = Math.min(clock.getDelta(), max_time_step); // make sure physics time step is sufficiently small
     animation_time += dt; 
+    // wall_uniforms.animation_time.value = animation_time;
 
 
     // Update the spatial_lookup array
@@ -833,6 +1091,7 @@ function animate() {
         // all_points[i].position.y = (all_points[i].position.y + 1) % 1;
     }
     // current_positions = updated_positions;
+    updateMirroredPoints();
 
     if (playerCollisionMesh) {
       if (keys.w && !isRocking) {
@@ -919,6 +1178,22 @@ function updateObstacles() {
             obstacle_objects_in_scene[i].position.x += moveX;
             obstacle_objects_in_scene[i].position.z += moveZ;
         }
+        // Scroll wall texture in the +z direction at the same rate
+        const scroll_speed = moveSpeed * 23;// Adjust scroll speed
+
+        // top facing wall material scroll
+        rockMaterial.map.offset.y += moveZ * scroll_speed; 
+        rockMaterial.normalMap.offset.y += moveZ * scroll_speed; 
+        rockMaterial.displacementMap.offset.y += moveZ * scroll_speed; 
+        rockMaterial.roughnessMap.offset.y += moveZ * scroll_speed; 
+        rockMaterial.aoMap.offset.y += moveZ * scroll_speed; 
+
+        // side facing wall material scroll
+        rockMaterial_inner.map.offset.x += moveZ * scroll_speed; 
+        rockMaterial_inner.normalMap.offset.x += moveZ * scroll_speed; 
+        rockMaterial_inner.displacementMap.offset.x += moveZ * scroll_speed; 
+        rockMaterial_inner.roughnessMap.offset.x += moveZ * scroll_speed; 
+        rockMaterial_inner.aoMap.offset.x += moveZ * scroll_speed; 
     }
 
     requestAnimationFrame(updateObstacles); // Keep updating smoothly
@@ -929,6 +1204,16 @@ updateObstacles();
 
 
 // **************************************************************************************************
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1390,16 +1675,25 @@ function get_neighbor_indices(sample_point) {
 
 
 // Create a Gaussian texture for smooth blending
-function createGaussianTexture(size = 128) {
+function createGaussianTexture(r, g, b, size = 128) {
     const canvas = document.createElement("canvas");
     canvas.width = size;
     canvas.height = size;
     const ctx = canvas.getContext("2d");
 
-    // Create a radial gradient
+
+    // const centerColor = "rgb(26, 169, 208)";
+    // const edgeColor = "rgba(26, 169, 208, 0)";
+
+    // // Convert RGB values to CSS color strings
+    // const r = colorParams.r;
+    const centerColor = `rgb(${r * 255}, ${g * 255}, ${b * 255})`;
+    const edgeColor = `rgba(${r * 255}, ${g * 255}, ${b * 255}, 0)`; // Fully transparent edges
+
+    // Create radial gradient
     const gradient = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-    gradient.addColorStop(0, "rgb(255, 255, 255)");
-    gradient.addColorStop(1, "rgba(255, 255, 255, 0)");
+    gradient.addColorStop(0, centerColor);  // Center color
+    gradient.addColorStop(1, edgeColor);    // Transparent edges
 
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, size, size);

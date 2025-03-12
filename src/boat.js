@@ -4,7 +4,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 // import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
-
+import { mx_bilerp_0 } from 'three/src/nodes/materialx/lib/mx_noise.js';
 (function(){var script=document.createElement('script');script.onload=function(){var stats=new Stats();document.body.appendChild(stats.dom);requestAnimationFrame(function loop(){stats.update();requestAnimationFrame(loop)});};script.src='https://mrdoob.github.io/stats.js/build/stats.min.js';document.head.appendChild(script);})()
 // Scene setup
 const scene = new THREE.Scene();
@@ -395,7 +395,7 @@ window.addEventListener('keyup', (event) => {
     // if (event.key === ' ') movement.freeCamera = !movement.freeCamera; 
 });
 
-
+// console.log(obstacles);
 // Animation loop
 function animate() {
     requestAnimationFrame(animate);
@@ -498,6 +498,9 @@ function animate() {
         // 🎯 **Update Centered Text**
         document.getElementById("centerText").innerText = text;
         document.getElementById("centerText").style.display = text ? "block" : "none"; // Show if text is not empty
+        `Score: ${score}\n` +
+        `Position: (${boat.position.x.toFixed(2)}, ${boat.position.y.toFixed(2)}, ${boat.position.z.toFixed(2)})\n` +
+        `Velocity: ${velocity.toFixed(2)}`;
 
         // 🎥 **Handle Free Camera Mode**   // could be deleted in the end
         if (movement.freeCamera) {
