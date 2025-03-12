@@ -30,6 +30,14 @@ import { color } from 'three/src/nodes/TSL.js';
 
 
 const scene = new THREE.Scene();
+const loader = new THREE.TextureLoader();
+
+// background image
+loader.load('assets/background_image/light_trails_1.jpg', function (texture) {
+    texture.colorSpace = THREE.SRGBColorSpace
+    texture.minFilter = THREE.LinearFilter;
+    scene.background = texture;
+});
 
 //THREE.PerspectiveCamera( fov angle, aspect ratio, near depth, far depth );
 const camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
@@ -73,7 +81,7 @@ const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
 directionalLight.position.set(0.5, .0, 1.0).normalize();
 scene.add(directionalLight);
 
-const ambientLight = new THREE.AmbientLight(0x505050);  // Soft white light
+const ambientLight = new THREE.AmbientLight('rgb(178, 125, 1)', 4);  // Soft white light //0x505050
 scene.add(ambientLight);
 // **************************************************************************************************
 
@@ -84,6 +92,7 @@ scene.add(ambientLight);
 // **************************************************************************************************
 // *********************************** OBSTACLE OBJECTS IN SCENE ************************************
 // **************************************************************************************************
+let animation_time = 0;
 
 // ARRAY OF OBSTACLE MESHES - used to calculate interactions with fluid based on obstacle positions
 let obstacle_objects_in_scene = []; // *** ADD ALL OBSTACLES CURRENTLY IN THE SCENE TO THIS ARRAY FOR FLUID TO INTERACT WITH IT
@@ -107,9 +116,9 @@ function createBox(x, y, z) {
 }
 
 // randomly enerate box obstacles within the given x and z range
-for (let i = 0; i < 20; i++) {
-    let randomX = Math.random() * 0.8;  // x between 0 and 0.8
-    let randomZ = Math.random() * (-40) - 1;  // z between -5 and -1
+for (let i = 0; i < 50; i++) {
+    let randomX = Math.random() * 1;  // x between 0 and 0.8
+    let randomZ = (Math.random() - 1) * 100; 
     createBox(randomX, 0.2, randomZ);
 }
 // **************************************************************************************************
@@ -128,7 +137,7 @@ for (let i = 0; i < 20; i++) {
 var params = {
     // FLUID VISULIZATION
     point_radius: 0.12, // 0.08 nice visually with Gaussian Sprite material
-    point_opacity: 0.5, // 0.6 nice visually
+    point_opacity: 0.7, // 0.6 nice visually
     show_neighbor_search: false,
 
     // BOUNDARY VISUALIZATION
@@ -153,7 +162,7 @@ var params = {
 // in 3d max ~1500 with current smoothing radius of 0.1
 // const water_color = "rgb(26, 169, 208)"; // vibrant water color: "rgb(26, 169, 208)"
 var colorParams = { // note: make sure one value close to zero so not washed out with white
-    r: 0.06,
+    r: 0.04,
     g: 0.65,
     b: 0.5
 };
@@ -261,49 +270,163 @@ const wall_material = new THREE.MeshPhongMaterial({
     color: wall_color,
 });
 
-// Create thick wall geometry (extends 5 units in x)
-const wall_geometry = new THREE.BoxGeometry(5, 0.6, 6); // (width, height, depth)
-
-// Left wall: extends from x = -5 to x = 0
-const leftWall = new THREE.Mesh(wall_geometry, wall_material);
-leftWall.position.set(-2.62, 0, 0); // Centered at -2.5 so it spans (-5 to 0)
-scene.add(leftWall);
-
-// Right wall: extends from x = 1 to x = 6
-const rightWall = new THREE.Mesh(wall_geometry, wall_material);
-rightWall.position.set(3.62, 0, 0); // Centered at 3.5 so it spans (1 to 6)
-scene.add(rightWall);
-
-// // Bottom wall
-// const bottomWall = new THREE.Mesh(wall_geometry, wall_material);
-// bottomWall.position.set(0.5, -0.6, 0); // Centered at 3.5 so it spans (1 to 6)
-// scene.add(bottomWall);
 
 
-// // ADD BASE COLOR OF WATER BELOW BOUNDING BOX
-// let base_water_box_geometry = new THREE.BoxGeometry( params.boundary_box_width, 0.01, 3 * params.boundary_box_length );
-// const base_water_material = new THREE.MeshBasicMaterial({
-//     color: "rgb(117,255,255)",
-//     transparent: false,
-//     // opacity: params.opacity,  // Semi-transparent for a water-like effect
-// });
+// Load all texture maps
+const textureLoader = new THREE.TextureLoader();
+const rockDisplacementScale = 0.3; // how deep the rocks look
 
-// const waterBaseMaterial = new THREE.MeshBasicMaterial({
-//     color: "rgb(117,255,255)",  // Same color as fluid particles
-//     transparent: true,
-//     opacity: 1.,  // Semi-transparent for a glowing effect
-//     blending: THREE.AdditiveBlending,  // Make it glow like particles
-//     depthWrite: false, // Prevents depth issues with transparency
-// });
+const rockTextures = {
+    map: textureLoader.load('assets/damp-mossy-boulders-unity/damp-mossy-boulders_albedo.png'),
+    normalMap: textureLoader.load('assets/damp-mossy-boulders-unity/damp-mossy-boulders_normal-ogl.png'),
+    displacementMap: textureLoader.load('assets/damp-mossy-boulders-unity/damp-mossy-boulders_height.png'),
+    roughnessMap: textureLoader.load('assets/damp-mossy-boulders-unity/damp-mossy-boulders_metallic.psd'),
+    aoMap: textureLoader.load('assets/damp-mossy-boulders-unity/damp-mossy-boulders_ao.png'),
+};
 
-// // Create the water base mesh
-// const base_water_box = new THREE.Mesh(base_water_box_geometry, waterBaseMaterial);
+// Configure texture properties
+Object.values(rockTextures).forEach(texture => {
+    texture.wrapS = texture.wrapT = THREE.RepeatWrapping; // Allow infinite scrolling
+    texture.repeat.set(4, 4); // Adjust tiling
+});
 
-// // Position it at the bottom of the bounding box
-// base_water_box.position.set( params.boundary_box_width / 2, -0.01 / 2, - params.boundary_box_length / 2); // Adjust `y` position to align with floor
+// Create rock material with depth effects
+const rockMaterial = new THREE.MeshStandardMaterial({
+    map: rockTextures.map,
+    normalMap: rockTextures.normalMap,
+    displacementMap: rockTextures.displacementMap,
+    displacementScale: rockDisplacementScale, // Controls depth intensity
+    displacementBias: 0, // Lowers the entire surface so it doesn't "float"
+    roughnessMap: rockTextures.roughnessMap,
+    aoMap: rockTextures.aoMap,
+});
 
-// Add to scene
-// scene.add(base_water_box);
+// CREATE SEPARATE TEXTURE FOR THE SIDE WALLS SO CAN SCROLL IN THE Z DIRECTION TOO
+const rockTextures_inner = {
+    map: textureLoader.load('assets/damp-mossy-boulders-unity-inner/damp-mossy-boulders_albedo.png'),
+    normalMap: textureLoader.load('assets/damp-mossy-boulders-unity-inner/damp-mossy-boulders_normal-ogl.png'),
+    displacementMap: textureLoader.load('assets/damp-mossy-boulders-unity-inner/damp-mossy-boulders_height.png'),
+    roughnessMap: textureLoader.load('assets/damp-mossy-boulders-unity-inner/damp-mossy-boulders_metallic.psd'),
+    aoMap: textureLoader.load('assets/damp-mossy-boulders-unity-inner/damp-mossy-boulders_ao.png'),
+};
+
+// Configure texture properties
+Object.values(rockTextures_inner).forEach(texture => {
+    texture.wrapS = texture.wrapT = THREE.RepeatWrapping; // Allow infinite scrolling
+    texture.repeat.set(4, 1); // Adjust tiling
+});
+
+// Create rock material with depth effects
+const rockMaterial_inner = new THREE.MeshStandardMaterial({
+    map: rockTextures_inner.map,
+    normalMap: rockTextures_inner.normalMap,
+    displacementMap: rockTextures_inner.displacementMap,
+    displacementScale: rockDisplacementScale, // Controls depth intensity
+    displacementBias: 0, // Lowers the entire surface so it doesn't "float"
+    roughnessMap: rockTextures_inner.roughnessMap,
+    aoMap: rockTextures_inner.aoMap,
+});
+
+
+function fadeDisplacementEdges(texturePath, callback) {
+    const image = new Image();
+    image.src = texturePath;
+    image.crossOrigin = "anonymous";
+
+    image.onload = function () {
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+
+        canvas.width = image.width;
+        canvas.height = image.height;
+        
+        // Draw the original heightmap
+        ctx.drawImage(image, 0, 0);
+
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = imageData.data;
+        const width = canvas.width;
+        const height = canvas.height;
+
+        // Apply a smooth fade to black near the edges
+        for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+                const index = (y * width + x) * 4;
+
+                // Compute normalized distance from center (for radial fade) or from edges
+                const edgeFade = Math.min(
+                    x / width, // Left fade
+                    (width - x) / width, // Right fade
+                    y / height, // Top fade
+                    (height - y) / height // Bottom fade
+                );
+
+                // Smoothly reduce intensity near edges
+                const fadeFactor = 1 - Math.pow(2 * edgeFade - 1, 2); // Exponent controls the smoothness of transition at edge
+                data[index] *= fadeFactor; // Red (height in grayscale)
+                data[index + 1] *= fadeFactor; // Green
+                data[index + 2] *= fadeFactor; // Blue
+            }
+        }
+
+        ctx.putImageData(imageData, 0, 0);
+
+        // Convert the modified canvas into a Three.js texture
+        const fadedTexture = new THREE.CanvasTexture(canvas);
+        fadedTexture.wrapS = THREE.RepeatWrapping;
+        fadedTexture.wrapT = THREE.RepeatWrapping;
+        fadedTexture.repeat.set(4, 4); // Adjust tiling
+        fadedTexture.needsUpdate = true;
+
+        callback(fadedTexture);
+    };
+}
+
+fadeDisplacementEdges("assets/damp-mossy-boulders-unity/damp-mossy-boulders_height.png", function(fadedTexture) {
+    rockMaterial.displacementMap = fadedTexture;
+    rockMaterial.displacementMap.needsUpdate = true;
+});
+
+fadeDisplacementEdges("assets/damp-mossy-boulders-unity-inner/damp-mossy-boulders_height.png", function(fadedTexture) {
+    rockMaterial_inner.displacementMap = fadedTexture;
+    rockMaterial_inner.displacementMap.needsUpdate = true;
+});
+
+
+const wallDepth = 5; // Thickness of wall extension
+const wallHeight = 0.6; // Height of walls (-0.3 to 0.3)
+const wallLength = 6; // Extends from z = -3 to z = 3
+
+
+// Create LEFT WALL (Top-facing and Side-facing)
+const rock_wall_buffer = rockDisplacementScale - 0.1;
+const leftWallTop = new THREE.Mesh(new THREE.PlaneGeometry(wallDepth, wallLength, 100, 100), rockMaterial);
+leftWallTop.rotation.x = -Math.PI / 2; // Face upwards
+leftWallTop.position.set(-2.5 - rock_wall_buffer, 0.3, 0); // Top of the wall
+scene.add(leftWallTop);
+
+// Create RIGHT WALL (Top-facing and Side-facing)
+const rightWallTop = new THREE.Mesh(new THREE.PlaneGeometry(wallDepth, wallLength, 100, 100), rockMaterial);
+rightWallTop.rotation.x = -Math.PI / 2; // Face upwards
+rightWallTop.position.set(3.5 + rock_wall_buffer, 0.3, 0);
+scene.add(rightWallTop);
+
+
+const leftWallSide = new THREE.Mesh(new THREE.PlaneGeometry(wallLength, wallHeight, 100, 100), rockMaterial_inner); // -> change side material for scrolling / tiling?
+leftWallSide.rotation.y = Math.PI / 2; // Face inwards
+leftWallSide.position.set(0 - rock_wall_buffer, 0, 0); // Align with side
+scene.add(leftWallSide);
+
+const rightWallSide = new THREE.Mesh(new THREE.PlaneGeometry(wallLength, wallHeight, 100, 100), rockMaterial_inner);
+rightWallSide.rotation.y = -Math.PI / 2; // Face inwards
+rightWallSide.rotation.x = Math.PI; // Scroll in correct direction
+rightWallSide.position.set(1 + rock_wall_buffer, 0, 0);
+scene.add(rightWallSide);
+
+const bottomWall = new THREE.Mesh(new THREE.PlaneGeometry(wallDepth, wallLength, 100, 100), rockMaterial);
+bottomWall.rotation.x = -Math.PI / 2; // Face upwards
+bottomWall.position.set(0.5, -0.3, 0);
+scene.add(bottomWall);
 
 // *********************************************************************************
 
@@ -517,7 +640,6 @@ ObjectInteractionFolder.open();
 // *********************************** GLOBAL VARIABLES TO UPDATE ***********************************
 // **************************************************************************************************
 // TIME
-let animation_time = 0;
 let dt;
 const clock = new THREE.Clock();
 let last_time_spatial_lookup_updated = -1;
@@ -551,6 +673,7 @@ function animate() {
     // dt = clock.getDelta(); // get time since last frame
     dt = Math.min(clock.getDelta(), max_time_step); // make sure physics time step is sufficiently small
     animation_time += dt; 
+    // wall_uniforms.animation_time.value = animation_time;
 
 
     // Update the spatial_lookup array
@@ -649,6 +772,22 @@ function updateObstacles() {
             obstacle_objects_in_scene[i].position.x += moveX;
             obstacle_objects_in_scene[i].position.z += moveZ;
         }
+        // Scroll wall texture in the +z direction at the same rate
+        const scroll_speed = moveSpeed * 23;// Adjust scroll speed
+
+        // top facing wall material scroll
+        rockMaterial.map.offset.y += moveZ * scroll_speed; 
+        rockMaterial.normalMap.offset.y += moveZ * scroll_speed; 
+        rockMaterial.displacementMap.offset.y += moveZ * scroll_speed; 
+        rockMaterial.roughnessMap.offset.y += moveZ * scroll_speed; 
+        rockMaterial.aoMap.offset.y += moveZ * scroll_speed; 
+
+        // side facing wall material scroll
+        rockMaterial_inner.map.offset.x += moveZ * scroll_speed; 
+        rockMaterial_inner.normalMap.offset.x += moveZ * scroll_speed; 
+        rockMaterial_inner.displacementMap.offset.x += moveZ * scroll_speed; 
+        rockMaterial_inner.roughnessMap.offset.x += moveZ * scroll_speed; 
+        rockMaterial_inner.aoMap.offset.x += moveZ * scroll_speed; 
     }
 
     requestAnimationFrame(updateObstacles); // Keep updating smoothly
