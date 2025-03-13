@@ -613,28 +613,28 @@ let animation_time = 0;
 let obstacle_objects_in_scene = []; // *** ADD ALL OBSTACLES CURRENTLY IN THE SCENE TO THIS ARRAY FOR FLUID TO INTERACT WITH IT
 
 // EXAMPLE OBSTACLES - generate some random boxes and control their movement with the keyboard
-const boxGeometry = new THREE.BoxGeometry(0.15, 0.4, 0.15);
-const boxMaterial = new THREE.MeshPhongMaterial({
-  color: "rgb(197, 48, 48)",
-  transparent: true,
-  opacity: 1,
-  side: THREE.DoubleSide,
-});
+// const boxGeometry = new THREE.BoxGeometry(0.15, 0.4, 0.15);
+// const boxMaterial = new THREE.MeshPhongMaterial({
+//   color: "rgb(197, 48, 48)",
+//   transparent: true,
+//   opacity: 1,
+//   side: THREE.DoubleSide,
+// });
 
 // Function to create a box at a random position
-function createBox(x, y, z) {
-  const box = new THREE.Mesh(boxGeometry, boxMaterial);
-  box.position.set(x, y, z);
-  scene.add(box);
-  obstacle_objects_in_scene.push(box);
-}
+// function createBox(x, y, z) {
+//   const box = new THREE.Mesh(boxGeometry, boxMaterial);
+//   box.position.set(x, y, z);
+//   scene.add(box);
+//   obstacle_objects_in_scene.push(box);
+// }
 
 // randomly enerate box obstacles within the given x and z range
-for (let i = 0; i < 50; i++) {
-  let randomX = Math.random() * 1; // x between 0 and 0.8
-  let randomZ = (Math.random() - 1) * 100;
-  createBox(randomX, 0.2, randomZ);
-}
+// for (let i = 0; i < 50; i++) {
+//   let randomX = Math.random() * 1; // x between 0 and 0.8
+//   let randomZ = (Math.random() - 1) * 100;
+//   createBox(randomX, 0.2, randomZ);
+// }
 // **************************************************************************************************
 
 // **************************************************************************************************
