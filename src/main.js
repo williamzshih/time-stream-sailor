@@ -426,133 +426,6 @@ const levelObstacles = [
 loadObj(levelObstacles[0]);
 objectsToLoad.forEach((obj) => loadObj(obj));
 
-let fps = 0.5; //fill in ur fps / 60, like if 30 -> 30/60 = 0.5
-let velocity = 0;
-let acceleration = 0.005 * fps;
-let friction = 0.93;
-let angularAcceleration = 0.02;
-let maxSpeed = 0.02;
-let direction = new THREE.Vector3(1, 0, 0); // Initial direction along x-axis
-const movement = {
-  forward: false,
-  brake: false,
-  left: false,
-  right: false,
-  freeCamera: false,
-};
-let boatLives = 3;
-let isImmune = false;
-let distanceTraveled = 0;
-let level = 1;
-let text = "3";
-let levelTreshold = 30;
-setTimeout(() => {
-  text = "2";
-}, 1000);
-setTimeout(() => {
-  text = "1";
-}, 2000);
-setTimeout(() => {
-  text = "";
-}, 3000);
-
-function resetLevel() {
-  console.log(`Switching to Level ${level}`);
-
-  // 🎯 Reset player state
-  boatLives = 3;
-  velocity = 0;
-  distanceTraveled = 0;
-
-  // 🎯 Clear current obstacles
-  activeObstacles.forEach((obstacle) => {
-    obstacle.visible = false;
-    scene.remove(obstacle);
-  });
-  unusedObstacles.forEach((obstacle) => scene.remove(obstacle));
-
-  activeObstacles = [];
-  unusedObstacles = [];
-  obstacles = [];
-
-  // 🎯 Load new obstacles based on level
-  loadObj(levelObstacles[level - 1]);
-
-  // 🎯 Change environment settings (placeholder)
-  // let envConfig = levelEnvironmentConfigs[level] || levelEnvironmentConfigs[1];
-  // document.body.style.backgroundImage = `url('textures/${envConfig.background}')`; // Example of changing background
-  // console.log(`Water color changed to: ${envConfig.waterColor}`);
-
-  text = `LEVEL ${level}`;
-  setTimeout(() => {
-    text = "";
-  }, 2000);
-}
-
-function respawnObstacles() {
-  if (unusedObstacles.length <= 10) return; // Prevent excessive spawning
-
-  let numToSpawn = THREE.MathUtils.randInt(5, 10); // Decide how many to spawn
-  console.log(`Spawning ${numToSpawn} obstacles`);
-
-  for (let i = 0; i < numToSpawn; i++) {
-    if (unusedObstacles.length === 0) break; // Safety check
-
-    let obstacle = unusedObstacles.pop(); // Get an obstacle from the pool
-    obstacle.position.set(
-      THREE.MathUtils.randFloat(3, 8), // X position far away
-      0, // Y stays the same
-      THREE.MathUtils.randFloat(-0.5, 0.5) // Z is randomized
-    );
-    obstacle.visible = true;
-    activeObstacles.push(obstacle);
-  }
-  // 🎯 Randomly decide to spawn a power-up (1/4 chance each)
-  const spawnChance = Math.random();
-  let powerUpPos = new THREE.Vector3(
-    THREE.MathUtils.randFloat(3, 8), // X position far away
-    0, // Y stays the same
-    THREE.MathUtils.randFloat(-0.5, 0.5) // Z is randomized
-  );
-
-  if (spawnChance < 0.25 && !heart.visible) {
-    heart.position.copy(powerUpPos);
-    heart.visible = true;
-  } else if (spawnChance < 0.5 && !heart.visible) {
-    power.position.copy(powerUpPos);
-    power.visible = true;
-  }
-}
-
-function handleBoatCollision() {
-  if (isImmune) return;
-
-  boatLives--;
-  velocity = 0;
-  text = "START";
-  setTimeout(() => {
-    text = "";
-  }, 2000);
-  if (boatLives <= 0) {
-    text = "GAME OVER";
-    acceleration = 0;
-    angularAcceleration = 0;
-  } else {
-    text = "Ouch!";
-    document.getElementById("centerText").style.color = "red";
-    setTimeout(() => {
-      text = "";
-      document.getElementById("centerText").style.color = "white";
-    }, 2000);
-  }
-  // Activate immunity for 3 seconds
-  isImmune = true;
-  setTimeout(() => {
-    isImmune = false;
-    // boat.material.color.set(0xb5823c); // Change back to brown
-  }, 2000);
-}
-
 window.addEventListener("keydown", (event) => {
   if (event.key === "w") movement.forward = true;
   if (event.key === "s") movement.brake = true;
@@ -715,50 +588,14 @@ window.addEventListener("keyup", (e) => {
 });
 
 let boatVelocity = 0;
-let isRocking = false;
 let hasImmunity = false;
-const ACCELERATION = 0.002;
-const ROTATION_SPEED = 0.05;
-const VERTICAL_SPEED = 0.005;
-const FRICTION = 0.99;
-const COLLISION_CHECK_RADIUS = 1;
+// const ACCELERATION = 0.002;
+// const ROTATION_SPEED = 0.05;
+// const FRICTION = 0.99;
+// const COLLISION_CHECK_RADIUS = 1;
 const boatDirection = new THREE.Vector3(0, 0, -1);
-const worldUp = new THREE.Vector3(0, 1, 0);
 const toObstacle = new THREE.Vector3();
 
-function animateRocking() {
-  isRocking = true;
-
-  let elapsedTime = 0;
-  const MS_PER_FRAME = 1000 / 120;
-  const ROCKING_DURATION = 1000;
-  const MAX_OFFSET = Math.PI / 6;
-  const DAMPING = 10;
-  const NUM_OSCILLATIONS = 5;
-  const IMMUNITY_DURATION = 1000;
-
-  const animation = setInterval(() => {
-    elapsedTime += MS_PER_FRAME;
-
-    const progress = elapsedTime / ROCKING_DURATION;
-    const offset =
-      MAX_OFFSET *
-      Math.exp(-DAMPING * progress) *
-      Math.sin(2 * Math.PI * NUM_OSCILLATIONS * progress);
-    player.rotation.x = -Math.PI / 2 + offset;
-    playerCollisionMesh.rotation.x = offset;
-
-    if (elapsedTime >= ROCKING_DURATION / 3) {
-      clearInterval(animation);
-      isRocking = false;
-      hasImmunity = true;
-
-      setTimeout(() => {
-        hasImmunity = false;
-      }, IMMUNITY_DURATION);
-    }
-  }, MS_PER_FRAME);
-}
 // **************************************************************************************************
 
 // **************************************************************************************************
@@ -1414,15 +1251,178 @@ const maxInt = Number.MAX_SAFE_INTEGER;
 let start_indices = Array.from({ length: num_fluid_points }, () => maxInt); // entry i (particle index) indicates where corresponding cell begins indexing in spatial_lookup
 // **************************************************************************************************
 
-// *********************************************************************************************
-// **************************************** RENDER LOOP ****************************************
-// *********************************************************************************************
-function animate() {
-  stats.begin(); // FPS counter
-  renderer.render(scene, camera);
-  stats.end(); // FPS counter
-  controls.update();
+// ****************************************************************************************************
+// ****************************************** RENDER LOOP *********************************************
+// ****************************************************************************************************
+const ANGLE_OFFSET = 0.25;
+const COLLISION_CHECK_RADIUS = 0.1;
+const MAX_LIVES = 3;
+const IMMUNITY_DURATION = 2000;
+const POWER_DURATION = 10000;
+const LEVEL_DISTANCE_THRESHOLD = 25;
+const up = new THREE.Vector3(0, 1, 0);
+const boatDimensions = new THREE.Vector3(
+  0.25587545013427737,
+  0.0800679512023927,
+  0.08903854751586926
+);
+let direction = new THREE.Vector3(1, 0, 0);
+let velocity = 0;
+let maxSpeed = 0.025;
+let acceleration = 0.001;
+let distanceTraveled = 0;
+let level = 1;
+let isImmune = false;
+let isRocking = false;
+let boatLives = MAX_LIVES;
 
+const movement = {
+  left: false,
+  right: false,
+  forward: false,
+  brake: false,
+  freeCamera: false,
+};
+
+const physics = {
+  targetY: 0.25,
+  minY: 0.15,
+  defaultY: 0.25,
+  maxY: 0.3,
+  velocity: 0,
+};
+
+function handleCollision() {
+  if (isImmune) return;
+
+  if (!isRocking) animateRocking();
+
+  boatLives--;
+  velocity = 0;
+
+  // TODO: review v
+  // text = "START";
+  // setTimeout(() => {
+  //   text = "";
+  // }, 2000);
+  // if (boatLives <= 0) {
+  //   text = "GAME OVER";
+  //   acceleration = 0;
+  //   ROTATION_SPEED = 0;
+  // } else {
+  //   text = "Ouch!";
+  //   document.getElementById("centerText").style.color = "red";
+  //   setTimeout(() => {
+  //     text = "";
+  //     document.getElementById("centerText").style.color = "white";
+  //   }, 2000);
+  // }
+}
+
+function animateRocking() {
+  isRocking = true;
+
+  let elapsedTime = 0;
+  const MS_PER_FRAME = 1000 / 60;
+  const ROCKING_DURATION = 1000;
+  const MAX_OFFSET = Math.PI / 6;
+  const DAMPING = 10;
+  const NUM_OSCILLATIONS = 5;
+
+  const animation = setInterval(() => {
+    elapsedTime += MS_PER_FRAME;
+
+    const progress = elapsedTime / ROCKING_DURATION;
+    const offset =
+      MAX_OFFSET *
+      Math.exp(-DAMPING * progress) *
+      Math.sin(2 * Math.PI * NUM_OSCILLATIONS * progress);
+    boat.rotation.x = -Math.PI / 2 + offset;
+
+    if (elapsedTime >= ROCKING_DURATION / 3) {
+      clearInterval(animation);
+      isRocking = false;
+      isImmune = true;
+
+      setTimeout(() => {
+        isImmune = false;
+      }, IMMUNITY_DURATION);
+    }
+  }, MS_PER_FRAME);
+}
+
+// TODO: review v
+// let text = "3";
+// setTimeout(() => {
+//   text = "2";
+// }, 1000);
+// setTimeout(() => {
+//   text = "1";
+// }, 2000);
+// setTimeout(() => {
+//   text = "";
+// }, 3000);
+
+// TODO: review v
+function resetLevel() {
+  boatLives = MAX_LIVES;
+  distanceTraveled = 0;
+
+  activeObstacles.forEach((obstacle) => {
+    obstacle.visible = false;
+    scene.remove(obstacle);
+  });
+  unusedObstacles.forEach((obstacle) => scene.remove(obstacle));
+
+  activeObstacles = [];
+  unusedObstacles = [];
+  obstacles = [];
+
+  loadObj(levelObstacles[level - 1]);
+
+  text = `LEVEL ${level}`;
+  setTimeout(() => {
+    text = "";
+  }, 2000);
+}
+
+// TODO: review v
+function respawnObstacles() {
+  if (unusedObstacles.length <= 10) return; // Prevent excessive spawning
+
+  let numToSpawn = THREE.MathUtils.randInt(5, 10); // Decide how many to spawn
+  console.log(`Spawning ${numToSpawn} obstacles`);
+
+  for (let i = 0; i < numToSpawn; i++) {
+    if (unusedObstacles.length === 0) break; // Safety check
+
+    let obstacle = unusedObstacles.pop(); // Get an obstacle from the pool
+    obstacle.position.set(
+      THREE.MathUtils.randFloat(3, 8), // X position far away
+      0, // Y stays the same
+      THREE.MathUtils.randFloat(-0.5, 0.5) // Z is randomized
+    );
+    obstacle.visible = true;
+    activeObstacles.push(obstacle);
+  }
+  // 🎯 Randomly decide to spawn a power-up (1/4 chance each)
+  const spawnChance = Math.random();
+  let powerUpPos = new THREE.Vector3(
+    THREE.MathUtils.randFloat(3, 8), // X position far away
+    0, // Y stays the same
+    THREE.MathUtils.randFloat(-0.5, 0.5) // Z is randomized
+  );
+
+  if (spawnChance < 0.25 && !heart.visible) {
+    heart.position.copy(powerUpPos);
+    heart.visible = true;
+  } else if (spawnChance < 0.5 && !heart.visible) {
+    power.position.copy(powerUpPos);
+    power.visible = true;
+  }
+}
+
+function animate() {
   // update time and delta_t
   // dt = clock.getDelta(); // get time since last frame
   dt = Math.min(clock.getDelta(), max_time_step); // make sure physics time step is sufficiently small
@@ -1497,52 +1497,6 @@ function animate() {
   updateMirroredPoints();
 
   if (playerCollisionMesh) {
-    if (keys.w && !isRocking) {
-      boatVelocity += ACCELERATION;
-      player.position.y -= VERTICAL_SPEED;
-      playerCollisionMesh.position.y -= VERTICAL_SPEED;
-    }
-    if (keys.s && !isRocking) {
-      boatVelocity -= ACCELERATION;
-      player.position.y -= VERTICAL_SPEED;
-      playerCollisionMesh.position.y -= VERTICAL_SPEED;
-    }
-    if (keys.a && !isRocking) {
-      player.rotation.z += ROTATION_SPEED;
-      playerCollisionMesh.rotation.y += ROTATION_SPEED;
-      boatDirection.applyAxisAngle(worldUp, ROTATION_SPEED);
-      boatBBOffset.applyAxisAngle(worldUp, ROTATION_SPEED);
-    }
-    if (keys.d && !isRocking) {
-      player.rotation.z -= ROTATION_SPEED;
-      playerCollisionMesh.rotation.y -= ROTATION_SPEED;
-      boatDirection.applyAxisAngle(worldUp, -ROTATION_SPEED);
-      boatBBOffset.applyAxisAngle(worldUp, -ROTATION_SPEED);
-    }
-    if (keys[" "] && !isRocking) {
-      player.position.y += VERTICAL_SPEED;
-      playerCollisionMesh.position.y += VERTICAL_SPEED;
-    }
-    if (keys.shift && !isRocking) {
-      player.position.y -= VERTICAL_SPEED;
-      playerCollisionMesh.position.y -= VERTICAL_SPEED;
-    }
-
-    boatVelocity *= FRICTION;
-
-    const buoyancyForce = calculateBuoyancyForce(
-      playerCollisionMesh.position,
-      boatBBDimensions
-    );
-    player.position.y += buoyancyForce.y * 0.001;
-    playerCollisionMesh.position.y += buoyancyForce.y * 0.001;
-
-    player.position.y -= params.grav_strength * 0.005;
-    playerCollisionMesh.position.y -= params.grav_strength * 0.005;
-
-    player.position.addScaledVector(boatDirection, boatVelocity);
-    playerCollisionMesh.position.copy(player.position).add(boatBBOffset);
-
     for (const obstacle of obstaclesArr) {
       toObstacle.subVectors(obstacle.position, playerCollisionMesh.position);
       if (
@@ -1566,107 +1520,161 @@ function animate() {
     controls.target.copy(player.position);
   }
 
+  // ============= //
+  // BOAT MOVEMENT //
+  // ============= //
+
+  // TODO: review v
   if (boat && heart && power) {
-    // BOAT MOVEMENT
+    let targetZRotation = 0;
+    let targetXRotation = -Math.PI / 2;
+    let targetYRotation = 0;
+
     if (movement.left) {
-      if (boat.rotation.z < 1) {
-        boat.rotation.z += angularAcceleration;
-        direction.applyAxisAngle(
-          new THREE.Vector3(0, 1, 0),
-          angularAcceleration
-        );
-      }
+      targetZRotation = ANGLE_OFFSET;
+      targetXRotation = -Math.PI / 2 - ANGLE_OFFSET;
     }
+
     if (movement.right) {
-      if (boat.rotation.z > -1) {
-        boat.rotation.z -= angularAcceleration;
-        direction.applyAxisAngle(
-          new THREE.Vector3(0, 1, 0),
-          -angularAcceleration
-        );
-      }
+      targetZRotation = -ANGLE_OFFSET;
+      targetXRotation = -Math.PI / 2 + ANGLE_OFFSET;
     }
+
+    if (movement.forward) targetYRotation = ANGLE_OFFSET;
+    if (movement.brake) targetYRotation = -ANGLE_OFFSET;
+
+    boat.rotation.z = THREE.MathUtils.lerp(
+      boat.rotation.z,
+      targetZRotation,
+      0.1
+    );
+
+    boat.rotation.x = THREE.MathUtils.lerp(
+      boat.rotation.x,
+      targetXRotation,
+      0.1
+    );
+
+    boat.rotation.y = THREE.MathUtils.lerp(
+      boat.rotation.y,
+      targetYRotation,
+      0.1
+    );
+    direction.applyAxisAngle(new THREE.Vector3(0, 1, 0), boat.rotation.z / 10);
+
+    if (movement.forward || movement.brake) physics.targetY = physics.minY;
+    else physics.targetY = physics.defaultY;
+
+    const buoyancyForce = calculateBuoyancyForce(boat.position, boatDimensions); // TODO: <- review
+    physics.targetY += buoyancyForce.y * 0.05;
+    physics.targetY = THREE.MathUtils.clamp(
+      physics.targetY,
+      physics.minY,
+      physics.maxY
+    );
+
+    physics.velocity += (physics.targetY - boat.position.y) * 0.05;
+    boat.position.y += physics.velocity;
+    boat.position.y = THREE.MathUtils.clamp(
+      boat.position.y,
+      physics.minY,
+      physics.maxY
+    );
+
     if (movement.forward)
       velocity = Math.min(velocity + acceleration, maxSpeed);
-    if (movement.brake) velocity *= friction;
-    if (!movement.forward && !movement.brake) {
-      velocity *= friction; // Apply friction only when no input is given
-    }
-    let movementVector = direction.clone().multiplyScalar(velocity);
-    // 🎯 Split movement into X and Z components
-    let movementX = new THREE.Vector3(movementVector.x, 0, 0); // Forward/backward
-    let movementZ = new THREE.Vector3(0, 0, movementVector.z); // Left/rightw
+    if (movement.brake || !movement.forward)
+      velocity = Math.max(velocity - acceleration, 0);
 
-    let newBoatPosition = boat.position.clone().add(movementZ);
+    const movementX = new THREE.Vector3(direction.x * velocity, 0, 0);
+    const movementZ = new THREE.Vector3(0, 0, direction.z * velocity);
+
+    const newBoatPosition = boat.position.add(movementZ);
     newBoatPosition.z = THREE.MathUtils.clamp(
       newBoatPosition.z,
       poolBoundaries.minZ * 0.9,
       poolBoundaries.maxZ * 0.9
     );
+
     boat.position.copy(newBoatPosition);
+    boat.position.y = THREE.MathUtils.lerp(
+      boat.position.y,
+      physics.targetY,
+      0.1
+    );
 
-    // 🎯 Apply X-movement (forward/backward) to obstacles/objects in reverse
-    if (heart) heart.position.sub(movementX);
-    if (power) power.position.sub(movementX);
+    heart.position.sub(movementX);
+    power.position.sub(movementX);
+
     for (let i = activeObstacles.length - 1; i >= 0; i--) {
-      let obstacle = activeObstacles[i];
-      obstacle.position.sub(movementX); // Move obstacles in opposite X direction
+      const obstacle = activeObstacles[i];
+      obstacle.position.sub(movementX);
 
-      if (obstacle.position.x < -0.5) {
-        // If past the boat
+      if (obstacle.position.x < 0) {
         obstacle.visible = false;
-        obstacle.position.set(0, 10, 0); // Hide it
-        activeObstacles.splice(i, 1); // Remove from active list
-        unusedObstacles.push(obstacle); // Add back to unused pool
+        // obstacle.position.set(0, 10, 0); // TODO: maybe uncomment this
+        activeObstacles.splice(i, 1);
+        unusedObstacles.push(obstacle);
       }
 
-      obstacle.updateMatrixWorld(true); // Force update
-
-      let detectionRange = 0.08;
-      if (boat.position.distanceTo(obstacle.position) < detectionRange) {
-        //simple position based collision detect
-        console.log("hit");
-        handleBoatCollision();
-      }
+      if (calculatePerpendicularDistance(boat.position, obstacle.position) < COLLISION_CHECK_RADIUS * COLLISION_CHECK_RADIUS)
+        handleCollision();
     }
 
-    if (boat.position.distanceTo(heart.position) < 0.08) {
-      text = "Life+1";
-      setTimeout(() => {
-        text = "";
-      }, 1000);
-      heart.position.set(0, 10, 0); // Hide it
+    if (calculatePerpendicularDistance(boat.position, heart.position) < COLLISION_CHECK_RADIUS * COLLISION_CHECK_RADIUS) {
       heart.visible = false;
-      boatLives++; // 🎯 Increase life
+      // heart.position.set(0, 10, 0); // TODO: maybe uncomment this
+      boatLives++;
+
+      // text = "Life+1";
+      // setTimeout(() => {
+      //   text = "";
+      // }, 1000);
     }
 
-    if (boat.position.distanceTo(power.position) < 0.08) {
-      text = "Rush!!Just keep going forward!";
-      setTimeout(() => {
-        text = "";
-      }, 10000);
-      power.position.set(0, 10, 0); // Hide it
+    if (calculatePerpendicularDistance(boat.position, power.position) < COLLISION_CHECK_RADIUS * COLLISION_CHECK_RADIUS) {
       power.visible = false;
-
-      // 🎯 Apply power-up effect
-      maxSpeed *= 2; // 🚀 Double acceleration
-      acceleration *= 2; // 🚀 Double acceleration
+      // power.position.set(0, 10, 0); // TODO: maybe uncomment this
+      maxSpeed *= 2;
+      acceleration *= 2;
       isImmune = true;
       setTimeout(() => {
         maxSpeed /= 2;
         acceleration /= 2;
         isImmune = false;
-      }, 10000);
+      }, POWER_DURATION);
+
+      // text = "Rush!!Just keep going forward!";
+      // setTimeout(() => {
+      //   text = "";
+      // }, 10000);
     }
-    // 🎯 Detect Level
+
     distanceTraveled += movementX.x;
-    if (distanceTraveled >= levelTreshold) {
-      level++; // Increase level
-      resetLevel();
+
+    if (distanceTraveled >= LEVEL_DISTANCE_THRESHOLD) {
+      level++;
+      resetLevel(); // TODO: <- review
     }
 
     if (unusedObstacles.length > 10) {
-      respawnObstacles();
+      respawnObstacles(); // TODO: <- review
+    }
+
+    if (movement.freeCamera) camera.lookAt(boat.position);
+    else {
+      if (direction.angleTo(new THREE.Vector3(0, 0, 1)) > (3 * Math.PI) / 4)
+        direction = new THREE.Vector3(1, 0, 0).applyAxisAngle(up, Math.PI / 4);
+      if (direction.angleTo(new THREE.Vector3(0, 0, 1)) < Math.PI / 4)
+        direction = new THREE.Vector3(1, 0, 0).applyAxisAngle(up, -Math.PI / 4);
+      const lookAtOffset = direction.clone().multiplyScalar(10);
+      const lookAhead = boat.position.clone().add(lookAtOffset);
+      camera.lookAt(lookAhead);
+
+      const cameraOffset = direction.clone().multiplyScalar(-0.5);
+      cameraOffset.y = 0.25;
+      const cameraPosition = boat.position.clone().add(cameraOffset);
+      camera.position.lerp(cameraPosition, 0.5);
     }
 
     // 🎯 **Update HUD Text**
@@ -1682,30 +1690,14 @@ function animate() {
     // `Score: ${score}\n` +
     // `Position: (${boat.position.x.toFixed(2)}, ${boat.position.y.toFixed(2)}, ${boat.position.z.toFixed(2)})\n` +
     // `Velocity: ${velocity.toFixed(2)}`;
-
-    // 🎥 **Handle Free Camera Mode**   // could be deleted in the end
-    if (movement.freeCamera) {
-      // Move the camera to (0,10,0) and make it look at the boat
-      camera.lookAt(boat.position);
-    } else {
-      // 🎯 **Make Camera Look Ahead in Boat’s Moving Direction**
-      const lookAhead = boat.position
-        .clone()
-        .add(direction.clone().multiplyScalar(10));
-      camera.lookAt(lookAhead);
-
-      // Make the camera follow the boat
-      const cameraOffset = direction.clone().multiplyScalar(-0.3);
-      cameraOffset.y = 0.2;
-      const offsetPosition = boat.position.clone().add(cameraOffset);
-      camera.position.lerp(offsetPosition, 0.3); // Smooth camera movement
-    }
   }
 
   renderer.render(scene, camera);
+  controls.update();
 }
+
 renderer.setAnimationLoop(animate);
-// **************************************************************************************************
+// ****************************************************************************************************
 
 // ************************************ KEYBOARD INTERACTION ****************************************
 const moveSpeed = 0.03;
@@ -2160,8 +2152,8 @@ function calculateBuoyancyForce(boatPosition, boatDimensions) {
 function calculateWaterHeight() {
   const distances = fluid_points.sort(
     (a, b) =>
-      a.position.distanceTo(playerCollisionMesh.position) -
-      b.position.distanceTo(playerCollisionMesh.position)
+      a.position.distanceTo(boat.position) -
+      b.position.distanceTo(boat.position)
   );
   const numSamples = Math.min(params.buoyancy_sample_points, distances.length);
 
@@ -2343,4 +2335,10 @@ function compute_object_interaction_acceleration(i) {
   }
 
   return return_force;
+}
+
+function calculatePerpendicularDistance(pos1, pos2) {
+  const dx = pos1.x - pos2.x;
+  const dz = pos1.z - pos2.z;
+  return dx * dx + dz * dz;
 }
