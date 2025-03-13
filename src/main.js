@@ -1297,26 +1297,28 @@ function handleCollision() {
 
   if (!isRocking) animateRocking();
 
+  isImmune = true;
+
   boatLives--;
   velocity = 0;
 
   // TODO: review v
-  // text = "START";
-  // setTimeout(() => {
-  //   text = "";
-  // }, 2000);
-  // if (boatLives <= 0) {
-  //   text = "GAME OVER";
-  //   acceleration = 0;
-  //   ROTATION_SPEED = 0;
-  // } else {
-  //   text = "Ouch!";
-  //   document.getElementById("centerText").style.color = "red";
-  //   setTimeout(() => {
-  //     text = "";
-  //     document.getElementById("centerText").style.color = "white";
-  //   }, 2000);
-  // }
+  text = "START";
+  setTimeout(() => {
+    text = "";
+  }, 2000);
+  if (boatLives <= 0) {
+    text = "GAME OVER";
+    acceleration = 0;
+    // ROTATION_SPEED = 0;
+  } else {
+    text = "Ouch!";
+    document.getElementById("centerText").style.color = "red";
+    setTimeout(() => {
+      text = "";
+      document.getElementById("centerText").style.color = "white";
+    }, 2000);
+  }
 }
 
 function animateRocking() {
@@ -1352,16 +1354,16 @@ function animateRocking() {
 }
 
 // TODO: review v
-// let text = "3";
-// setTimeout(() => {
-//   text = "2";
-// }, 1000);
-// setTimeout(() => {
-//   text = "1";
-// }, 2000);
-// setTimeout(() => {
-//   text = "";
-// }, 3000);
+let text = "3";
+setTimeout(() => {
+  text = "2";
+}, 1000);
+setTimeout(() => {
+  text = "1";
+}, 2000);
+setTimeout(() => {
+  text = "";
+}, 3000);
 
 // TODO: review v
 function resetLevel() {
@@ -1700,15 +1702,20 @@ function animate() {
     }
 
     // 🎯 **Update HUD Text**
-    // document.getElementById("directionText").innerText =
-    // `Life: ${boatLives}\n` +
-    // `Level: ${level}\n` +
-    // `Distance till exit: ${(levelTreshold-distanceTraveled).toFixed(1)}\n`
-    // ;
+    // TODO: review v
+    document.getElementById("directionText").innerText =
+      `Life: ${boatLives}\n` +
+      `Level: ${level}\n` +
+      `Distance till exit: ${(
+        LEVEL_DISTANCE_THRESHOLD - distanceTraveled
+      ).toFixed(1)}\n`;
 
     // 🎯 **Update Centered Text**
-    // document.getElementById("centerText").innerText = text;
-    // document.getElementById("centerText").style.display = text ? "block" : "none"; // Show if text is not empty
+    // TODO: review v
+    document.getElementById("centerText").innerText = text;
+    document.getElementById("centerText").style.display = text
+      ? "block"
+      : "none"; // Show if text is not empty
     // `Score: ${score}\n` +
     // `Position: (${boat.position.x.toFixed(2)}, ${boat.position.y.toFixed(2)}, ${boat.position.z.toFixed(2)})\n` +
     // `Velocity: ${velocity.toFixed(2)}`;
