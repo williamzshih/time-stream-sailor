@@ -1399,29 +1399,28 @@ function respawnObstacles() {
 
     let obstacle = unusedObstacles.pop(); // Get an obstacle from the pool
     obstacle.position.set(
-        THREE.MathUtils.randFloat(0, 1),
-        0.3, // Y stays the same
-        -THREE.MathUtils.randFloat(0, 5)
+      THREE.MathUtils.randFloat(0, 1),
+      0.3, // Y stays the same
+      -THREE.MathUtils.randFloat(0, 5)
     );
     obstacle.visible = true;
     activeObstacles.push(obstacle);
-}
-// 🎯 Randomly decide to spawn a power-up (1/4 chance each)
-const spawnChance = Math.random();
-let powerUpPos = new THREE.Vector3(
+  }
+  // 🎯 Randomly decide to spawn a power-up (1/4 chance each)
+  const spawnChance = Math.random();
+  let powerUpPos = new THREE.Vector3(
     THREE.MathUtils.randFloat(0, 1),
-        0.3, // Y stays the same
-        -THREE.MathUtils.randFloat(0, 5)
-);
+    0.3, // Y stays the same
+    -THREE.MathUtils.randFloat(0, 5)
+  );
 
-if (spawnChance < 0.25 && !heart.visible) {
-    
+  if (spawnChance < 0.25 && !heart.visible) {
     heart.position.copy(powerUpPos);
     heart.visible = true;
-} else if (spawnChance < 0.50 && !heart.visible) {
+  } else if (spawnChance < 0.5 && !heart.visible) {
     power.position.copy(powerUpPos);
     power.visible = true;
-}
+  }
 }
 
 function animate() {
@@ -1563,7 +1562,10 @@ function animate() {
       0.1
     );
 
-    direction.applyAxisAngle(new THREE.Vector3(0, 1, 0), (boat.rotation.z - Math.PI / 2) / 10);
+    direction.applyAxisAngle(
+      new THREE.Vector3(0, 1, 0),
+      (boat.rotation.z - Math.PI / 2) / 10
+    );
 
     if (movement.forward || movement.brake) physics.targetY = physics.minY;
     else physics.targetY = physics.defaultY;
@@ -1625,11 +1627,17 @@ function animate() {
         unusedObstacles.push(obstacle);
       }
 
-      if (calculatePerpendicularDistance(boat.position, obstacle.position) < COLLISION_CHECK_RADIUS * COLLISION_CHECK_RADIUS)
+      if (
+        calculatePerpendicularDistance(boat.position, obstacle.position) <
+        COLLISION_CHECK_RADIUS * COLLISION_CHECK_RADIUS
+      )
         handleCollision();
     }
 
-    if (calculatePerpendicularDistance(boat.position, heart.position) < COLLISION_CHECK_RADIUS * COLLISION_CHECK_RADIUS) {
+    if (
+      calculatePerpendicularDistance(boat.position, heart.position) <
+      COLLISION_CHECK_RADIUS * COLLISION_CHECK_RADIUS
+    ) {
       heart.visible = false;
       // heart.position.set(0, 10, 0); // TODO: maybe uncomment this
       boatLives++;
@@ -1640,7 +1648,10 @@ function animate() {
       // }, 1000);
     }
 
-    if (calculatePerpendicularDistance(boat.position, power.position) < COLLISION_CHECK_RADIUS * COLLISION_CHECK_RADIUS) {
+    if (
+      calculatePerpendicularDistance(boat.position, power.position) <
+      COLLISION_CHECK_RADIUS * COLLISION_CHECK_RADIUS
+    ) {
       power.visible = false;
       // power.position.set(0, 10, 0); // TODO: maybe uncomment this
       maxSpeed *= 2;
@@ -1674,7 +1685,10 @@ function animate() {
       if (direction.angleTo(new THREE.Vector3(1, 0, 0)) > (3 * Math.PI) / 4)
         direction = new THREE.Vector3(0, 0, -1).applyAxisAngle(up, Math.PI / 4);
       if (direction.angleTo(new THREE.Vector3(1, 0, 0)) < Math.PI / 4)
-        direction = new THREE.Vector3(0, 0, -1).applyAxisAngle(up, -Math.PI / 4);
+        direction = new THREE.Vector3(0, 0, -1).applyAxisAngle(
+          up,
+          -Math.PI / 4
+        );
       const lookAtOffset = direction.clone().multiplyScalar(10);
       const lookAhead = boat.position.clone().add(lookAtOffset);
       camera.lookAt(lookAhead);
