@@ -1,17 +1,86 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <meta charset="utf-8" />
-    <title>Assignment2</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Time Stream Sailor</title>
     <style>
       body {
         margin: 0;
+      }
+
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: url("assets/background_image/start_screen.jpg") no-repeat
+          center center/cover;
+      }
+
+      /* Fullscreen overlay */
+      #startScreen {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.15); /* Dark overlay */
+        color: white;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        text-align: center;
+        font-family: Arial, sans-serif;
+        font-size: 20px;
+        z-index: 10; /* Ensure it's on top */
+      }
+
+      #startScreen h1 {
+        margin-bottom: 20px;
+      }
+
+      #startScreen p {
+        margin-bottom: 10px;
+      }
+
+      #startScreen span {
+        color: yellow;
+        font-weight: bold;
+      }
+
+      /* Ensure the canvas takes up the full screen */
+      canvas {
+        display: block;
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
       }
     </style>
   </head>
   <body>
     <script type="module" src="/src/main.js"></script>
 
+    <div id="startScreen">
+      <h1>TIME STREAM SAILOR</h1>
+      <p>Sail through time, dodge obstacles, and master the currents!</p>
+      <p></p>
+      <p>The Gods have selected <span>you</span> for their next pet</p>
+      <p>
+        You have only <span>9 lives</span>. Hitting an obstacle loses a life
+      </p>
+      <p>Survive all <span>4 levels</span> to earn your freedom</p>
+      <p>Guide your boat using <span>W, A, and D</span></p>
+      <p></p>
+      <p>Press <span>SPACEBAR</span> to begin your journey...</p>
+      <p></p>
+      <p></p>
+    </div>
     <div
       id="directionText"
       style="

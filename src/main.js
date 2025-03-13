@@ -66,7 +66,12 @@ const renderer = new THREE.WebGLRenderer();
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.setClearColor(0x87ceeb);
-document.body.appendChild(renderer.domElement);
+document.body.addEventListener("keydown", (event) => {
+  if (event.key === " ") {
+    document.getElementById("startScreen").style.display = "none";
+    document.body.appendChild(renderer.domElement);
+  }
+});
 
 // ADD FPS COUNTER
 const stats = new Stats();
@@ -432,6 +437,7 @@ window.addEventListener("keydown", (event) => {
   if (event.key === "a") movement.left = true;
   if (event.key === "d") movement.right = true;
   if (event.key === " ") {
+    if (document.getElementById("startScreen").style.display === "none") return;
     //temporary restart
     movement.freeCamera = !movement.freeCamera;
     boat.position.copy(boatOffset);
@@ -1355,15 +1361,18 @@ function animateRocking() {
 
 // TODO: review v
 let text = "3";
-setTimeout(() => {
-  text = "2";
-}, 1000);
-setTimeout(() => {
-  text = "1";
-}, 2000);
-setTimeout(() => {
-  text = "";
-}, 3000);
+
+if (document.getElementById("startScreen").style.display === "none") {
+  setTimeout(() => {
+    text = "2";
+  }, 1000);
+  setTimeout(() => {
+    text = "1";
+  }, 2000);
+  setTimeout(() => {
+    text = "";
+  }, 3000);
+}
 
 // TODO: review v
 function resetLevel() {
