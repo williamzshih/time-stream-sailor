@@ -350,14 +350,14 @@ function loadObj({
   });
 }
 
-let boatOffset = new THREE.Vector3(0.15, 0.02, 0);
+let boatOffset = new THREE.Vector3(0.5, 0.3, 2.8);
 const objectsToLoad = [
   //The boat, the heart, and the power-up
   {
     file: "boat.obj",
     position: boatOffset,
     scale: new THREE.Vector3(0.0005, 0.0005, 0.0005),
-    rotation: new THREE.Euler(-1.57, 0, 0),
+    rotation: new THREE.Euler(-1.57, 0, 1.57),
     color: new THREE.Color(0xb5823c),
     type: "player", // Mark the boat as the player
   },
@@ -637,7 +637,7 @@ for (let i = 0; i < 50; i++) {
 // PARAMETERS CONTROLLABLE IN GUI
 var params = {
   // FLUID VISULIZATION
-  point_radius: 0.12, // 0.08 nice visually with Gaussian Sprite material
+  point_radius: 0.04, // 0.08 nice visually with Gaussian Sprite material
   point_opacity: 0.7, // 0.6 nice visually
   show_neighbor_search: false,
 
@@ -1262,11 +1262,11 @@ const POWER_DURATION = 10000;
 const LEVEL_DISTANCE_THRESHOLD = 25;
 const up = new THREE.Vector3(0, 1, 0);
 const boatDimensions = new THREE.Vector3(
-  0.25587545013427737,
+  0.08903854751586926,
   0.0800679512023927,
-  0.08903854751586926
+  0.25587545013427737
 );
-let direction = new THREE.Vector3(1, 0, 0);
+let direction = new THREE.Vector3(0, 0, -1);
 let velocity = 0;
 let maxSpeed = 0.025;
 let acceleration = 0.001;
@@ -1393,33 +1393,35 @@ function respawnObstacles() {
   let numToSpawn = THREE.MathUtils.randInt(5, 10); // Decide how many to spawn
   console.log(`Spawning ${numToSpawn} obstacles`);
 
+  // (0.5, 0.3, 2.8) boat pos
   for (let i = 0; i < numToSpawn; i++) {
     if (unusedObstacles.length === 0) break; // Safety check
 
     let obstacle = unusedObstacles.pop(); // Get an obstacle from the pool
     obstacle.position.set(
-      THREE.MathUtils.randFloat(3, 8), // X position far away
-      0, // Y stays the same
-      THREE.MathUtils.randFloat(-0.5, 0.5) // Z is randomized
+        THREE.MathUtils.randFloat(0, 1),
+        0.3, // Y stays the same
+        -THREE.MathUtils.randFloat(0, 5)
     );
     obstacle.visible = true;
     activeObstacles.push(obstacle);
-  }
-  // 🎯 Randomly decide to spawn a power-up (1/4 chance each)
-  const spawnChance = Math.random();
-  let powerUpPos = new THREE.Vector3(
-    THREE.MathUtils.randFloat(3, 8), // X position far away
-    0, // Y stays the same
-    THREE.MathUtils.randFloat(-0.5, 0.5) // Z is randomized
-  );
+}
+// 🎯 Randomly decide to spawn a power-up (1/4 chance each)
+const spawnChance = Math.random();
+let powerUpPos = new THREE.Vector3(
+    THREE.MathUtils.randFloat(0, 1),
+        0.3, // Y stays the same
+        -THREE.MathUtils.randFloat(0, 5)
+);
 
-  if (spawnChance < 0.25 && !heart.visible) {
+if (spawnChance < 0.25 && !heart.visible) {
+    
     heart.position.copy(powerUpPos);
     heart.visible = true;
-  } else if (spawnChance < 0.5 && !heart.visible) {
+} else if (spawnChance < 0.50 && !heart.visible) {
     power.position.copy(powerUpPos);
     power.visible = true;
-  }
+}
 }
 
 function animate() {
@@ -1526,26 +1528,32 @@ function animate() {
 
   // TODO: review v
   if (boat && heart && power) {
-    let targetZRotation = 0;
-    let targetXRotation = -Math.PI / 2;
+    let targetZRotation = Math.PI / 2;
     let targetYRotation = 0;
+    let targetXRotation = -Math.PI / 2;
 
     if (movement.left) {
-      targetZRotation = ANGLE_OFFSET;
-      targetXRotation = -Math.PI / 2 - ANGLE_OFFSET;
+      targetZRotation = Math.PI / 2 + ANGLE_OFFSET;
+      targetYRotation = -ANGLE_OFFSET;
     }
 
     if (movement.right) {
-      targetZRotation = -ANGLE_OFFSET;
-      targetXRotation = -Math.PI / 2 + ANGLE_OFFSET;
+      targetZRotation = Math.PI / 2 - ANGLE_OFFSET;
+      targetYRotation = ANGLE_OFFSET;
     }
 
-    if (movement.forward) targetYRotation = ANGLE_OFFSET;
-    if (movement.brake) targetYRotation = -ANGLE_OFFSET;
+    if (movement.forward) targetXRotation = -Math.PI / 2 - ANGLE_OFFSET;
+    if (movement.brake) targetXRotation = -Math.PI / 2 + ANGLE_OFFSET;
 
     boat.rotation.z = THREE.MathUtils.lerp(
       boat.rotation.z,
       targetZRotation,
+      0.1
+    );
+
+    boat.rotation.y = THREE.MathUtils.lerp(
+      boat.rotation.y,
+      targetYRotation,
       0.1
     );
 
@@ -1555,12 +1563,7 @@ function animate() {
       0.1
     );
 
-    boat.rotation.y = THREE.MathUtils.lerp(
-      boat.rotation.y,
-      targetYRotation,
-      0.1
-    );
-    direction.applyAxisAngle(new THREE.Vector3(0, 1, 0), boat.rotation.z / 10);
+    direction.applyAxisAngle(new THREE.Vector3(0, 1, 0), (boat.rotation.z - Math.PI / 2) / 10);
 
     if (movement.forward || movement.brake) physics.targetY = physics.minY;
     else physics.targetY = physics.defaultY;
@@ -1589,12 +1592,8 @@ function animate() {
     const movementX = new THREE.Vector3(direction.x * velocity, 0, 0);
     const movementZ = new THREE.Vector3(0, 0, direction.z * velocity);
 
-    const newBoatPosition = boat.position.add(movementZ);
-    newBoatPosition.z = THREE.MathUtils.clamp(
-      newBoatPosition.z,
-      poolBoundaries.minZ * 0.9,
-      poolBoundaries.maxZ * 0.9
-    );
+    const newBoatPosition = boat.position.add(movementX);
+    newBoatPosition.x = THREE.MathUtils.clamp(newBoatPosition.x, 0.05, 0.95);
 
     boat.position.copy(newBoatPosition);
     boat.position.y = THREE.MathUtils.lerp(
@@ -1603,14 +1602,23 @@ function animate() {
       0.1
     );
 
-    heart.position.sub(movementX);
-    power.position.sub(movementX);
+    heart.position.sub(movementZ);
+    power.position.sub(movementZ);
+
+    if (heart.position.z > 3.5) {
+      heart.visible = false;
+      // heart.position.set(0, 10, 0); // TODO: maybe uncomment this
+    }
+    if (power.position.z > 3.5) {
+      power.visible = false;
+      // power.position.set(0, 10, 0); // TODO: maybe uncomment this
+    }
 
     for (let i = activeObstacles.length - 1; i >= 0; i--) {
       const obstacle = activeObstacles[i];
-      obstacle.position.sub(movementX);
+      obstacle.position.sub(movementZ);
 
-      if (obstacle.position.x < 0) {
+      if (obstacle.position.z > 3.5) {
         obstacle.visible = false;
         // obstacle.position.set(0, 10, 0); // TODO: maybe uncomment this
         activeObstacles.splice(i, 1);
@@ -1650,7 +1658,7 @@ function animate() {
       // }, 10000);
     }
 
-    distanceTraveled += movementX.x;
+    distanceTraveled -= movementZ.z;
 
     if (distanceTraveled >= LEVEL_DISTANCE_THRESHOLD) {
       level++;
@@ -1663,10 +1671,10 @@ function animate() {
 
     if (movement.freeCamera) camera.lookAt(boat.position);
     else {
-      if (direction.angleTo(new THREE.Vector3(0, 0, 1)) > (3 * Math.PI) / 4)
-        direction = new THREE.Vector3(1, 0, 0).applyAxisAngle(up, Math.PI / 4);
-      if (direction.angleTo(new THREE.Vector3(0, 0, 1)) < Math.PI / 4)
-        direction = new THREE.Vector3(1, 0, 0).applyAxisAngle(up, -Math.PI / 4);
+      if (direction.angleTo(new THREE.Vector3(1, 0, 0)) > (3 * Math.PI) / 4)
+        direction = new THREE.Vector3(0, 0, -1).applyAxisAngle(up, Math.PI / 4);
+      if (direction.angleTo(new THREE.Vector3(1, 0, 0)) < Math.PI / 4)
+        direction = new THREE.Vector3(0, 0, -1).applyAxisAngle(up, -Math.PI / 4);
       const lookAtOffset = direction.clone().multiplyScalar(10);
       const lookAhead = boat.position.clone().add(lookAtOffset);
       camera.lookAt(lookAhead);
@@ -1707,10 +1715,9 @@ function updateObstacles() {
   let moveX = 0;
   let moveZ = 0;
 
-  if (keys.w) moveZ -= moveSpeed; // Move forward
-  if (keys.s) moveZ += moveSpeed; // Move backward
-  if (keys.a) moveX -= moveSpeed; // Move left
-  if (keys.d) moveX += moveSpeed; // Move right
+  if (movement.forward) moveZ += moveSpeed; // Move forward
+  if (movement.left) moveX -= moveSpeed; // Move left
+  if (movement.right) moveX += moveSpeed; // Move right
 
   // Apply movement to all obstacle objects
   if (moveX !== 0 || moveZ !== 0) {
