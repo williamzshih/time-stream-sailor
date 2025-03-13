@@ -350,14 +350,14 @@ function loadObj({
   });
 }
 
-let boatOffset = new THREE.Vector3(0.15, 0.02, 0);
+let boatOffset = new THREE.Vector3(0.5, 0.3, 2.8)
 const objectsToLoad = [
   //The boat, the heart, and the power-up
   {
     file: "boat.obj",
     position: boatOffset,
     scale: new THREE.Vector3(0.0005, 0.0005, 0.0005),
-    rotation: new THREE.Euler(-1.57, 0, 0),
+    rotation: new THREE.Euler(-1.57, 0, 1.57),
     color: new THREE.Color(0xb5823c),
     type: "player", // Mark the boat as the player
   },
@@ -432,7 +432,7 @@ let acceleration = 0.005 * fps;
 let friction = 0.93;
 let angularAcceleration = 0.02;
 let maxSpeed = 0.02;
-let direction = new THREE.Vector3(1, 0, 0); // Initial direction along x-axis
+let direction = new THREE.Vector3(0, 0, -1); // Initial direction along x-axis
 const movement = {
   forward: false,
   brake: false,
@@ -488,39 +488,41 @@ function resetLevel() {
     text = "";
   }, 2000);
 }
-
 function respawnObstacles() {
   if (unusedObstacles.length <= 10) return; // Prevent excessive spawning
 
   let numToSpawn = THREE.MathUtils.randInt(5, 10); // Decide how many to spawn
   console.log(`Spawning ${numToSpawn} obstacles`);
 
+  
+  // (0.5, 0.3, 2.8) boat pos
   for (let i = 0; i < numToSpawn; i++) {
-    if (unusedObstacles.length === 0) break; // Safety check
+      if (unusedObstacles.length === 0) break; // Safety check
 
-    let obstacle = unusedObstacles.pop(); // Get an obstacle from the pool
-    obstacle.position.set(
-      THREE.MathUtils.randFloat(3, 8), // X position far away
-      0, // Y stays the same
-      THREE.MathUtils.randFloat(-0.5, 0.5) // Z is randomized
-    );
-    obstacle.visible = true;
-    activeObstacles.push(obstacle);
+      let obstacle = unusedObstacles.pop(); // Get an obstacle from the pool
+      obstacle.position.set(
+          THREE.MathUtils.randFloat(0, 1),
+          0.3, // Y stays the same
+          -THREE.MathUtils.randFloat(0, 5)
+      );
+      obstacle.visible = true;
+      activeObstacles.push(obstacle);
   }
   // 🎯 Randomly decide to spawn a power-up (1/4 chance each)
   const spawnChance = Math.random();
   let powerUpPos = new THREE.Vector3(
-    THREE.MathUtils.randFloat(3, 8), // X position far away
-    0, // Y stays the same
-    THREE.MathUtils.randFloat(-0.5, 0.5) // Z is randomized
+      THREE.MathUtils.randFloat(0, 1),
+          0.3, // Y stays the same
+          -THREE.MathUtils.randFloat(0, 5)
   );
 
   if (spawnChance < 0.25 && !heart.visible) {
-    heart.position.copy(powerUpPos);
-    heart.visible = true;
-  } else if (spawnChance < 0.5 && !heart.visible) {
-    power.position.copy(powerUpPos);
-    power.visible = true;
+      
+      heart.position.copy(powerUpPos);
+      heart.visible = true;
+  } else if (spawnChance < 0.50 && !heart.visible) {
+      power.position.copy(powerUpPos);
+      power.visible = true;
   }
 }
 
@@ -558,16 +560,6 @@ window.addEventListener("keydown", (event) => {
   if (event.key === "s") movement.brake = true;
   if (event.key === "a") movement.left = true;
   if (event.key === "d") movement.right = true;
-  if (event.key === " ") {
-    //temporary restart
-    movement.freeCamera = !movement.freeCamera;
-    boat.position.copy(boatOffset);
-    velocity = 0;
-    camera.position.lerp(new THREE.Vector3(-0.2, 0.2, 0), 0.1);
-    controls.enableRotate = true; // Allow rotation
-    controls.enablePan = true; // Allow panning
-    controls.enableZoom = true; // Allow zooming
-  }
 });
 
 window.addEventListener("keyup", (event) => {
@@ -1566,141 +1558,115 @@ function animate() {
     controls.target.copy(player.position);
   }
 
-  if (boat && heart && power) {
+  if (boat) {
     // BOAT MOVEMENT
     if (movement.left) {
-      if (boat.rotation.z < 1) {
-        boat.rotation.z += angularAcceleration;
-        direction.applyAxisAngle(
-          new THREE.Vector3(0, 1, 0),
-          angularAcceleration
-        );
-      }
+        if (boat.rotation.z < 2.5){
+            boat.rotation.z += angularAcceleration;
+            direction.applyAxisAngle(new THREE.Vector3(0, 1, 0), angularAcceleration);
+        }
     }
     if (movement.right) {
-      if (boat.rotation.z > -1) {
-        boat.rotation.z -= angularAcceleration;
-        direction.applyAxisAngle(
-          new THREE.Vector3(0, 1, 0),
-          -angularAcceleration
-        );
-      }
+        if (boat.rotation.z > 0.5){
+            boat.rotation.z -= angularAcceleration;
+            direction.applyAxisAngle(new THREE.Vector3(0, 1, 0), -angularAcceleration);
+        }
     }
-    if (movement.forward)
-      velocity = Math.min(velocity + acceleration, maxSpeed);
+    if (movement.forward) velocity = Math.min(velocity + acceleration, maxSpeed);
     if (movement.brake) velocity *= friction;
     if (!movement.forward && !movement.brake) {
-      velocity *= friction; // Apply friction only when no input is given
+        velocity *= friction; // Apply friction only when no input is given
     }
     let movementVector = direction.clone().multiplyScalar(velocity);
     // 🎯 Split movement into X and Z components
-    let movementX = new THREE.Vector3(movementVector.x, 0, 0); // Forward/backward
-    let movementZ = new THREE.Vector3(0, 0, movementVector.z); // Left/rightw
+    let movementX = new THREE.Vector3(movementVector.x, 0, 0); 
+    let movementZ = new THREE.Vector3(0, 0, movementVector.z);       
 
-    let newBoatPosition = boat.position.clone().add(movementZ);
-    newBoatPosition.z = THREE.MathUtils.clamp(
-      newBoatPosition.z,
-      poolBoundaries.minZ * 0.9,
-      poolBoundaries.maxZ * 0.9
-    );
+    let newBoatPosition = boat.position.clone().add(movementX);
+    newBoatPosition.x = THREE.MathUtils.clamp(newBoatPosition.x, 0.05, 0.95);
     boat.position.copy(newBoatPosition);
 
-    // 🎯 Apply X-movement (forward/backward) to obstacles/objects in reverse
-    if (heart) heart.position.sub(movementX);
-    if (power) power.position.sub(movementX);
-    for (let i = activeObstacles.length - 1; i >= 0; i--) {
-      let obstacle = activeObstacles[i];
-      obstacle.position.sub(movementX); // Move obstacles in opposite X direction
 
-      if (obstacle.position.x < -0.5) {
-        // If past the boat
-        obstacle.visible = false;
-        obstacle.position.set(0, 10, 0); // Hide it
-        activeObstacles.splice(i, 1); // Remove from active list
-        unusedObstacles.push(obstacle); // Add back to unused pool
-      }
-
-      obstacle.updateMatrixWorld(true); // Force update
-
-      let detectionRange = 0.08;
-      if (boat.position.distanceTo(obstacle.position) < detectionRange) {
-        //simple position based collision detect
-        console.log("hit");
-        handleBoatCollision();
-      }
+     // 🎯 Apply Z-movement (forward/backward) to obstacles/objects in reverse
+    heart.position.sub(movementZ);
+    power.position.sub(movementZ);
+    if (heart.position.z > 3.5) { // If past the boat
+        heart.visible = false;
+        heart.position.set(0, 10, 0); // Hide it
+    }
+    if (power.position.z > 3.5) { // If past the boat
+        power.visible = false;
+        power.position.set(0, 10, 0); // Hide it
     }
 
+     for (let i = activeObstacles.length - 1; i >= 0; i--) {
+         let obstacle = activeObstacles[i]
+         obstacle.position.sub(movementZ); // Move obstacles in opposite Z direction
+         
+         if (obstacle.position.z > 3.5) { // If past the boat
+             obstacle.visible = false;
+             obstacle.position.set(0, 10, 0); // Hide it
+             activeObstacles.splice(i, 1); // Remove from active list
+             unusedObstacles.push(obstacle); // Add back to unused pool
+         }
+
+         obstacle.updateMatrixWorld(true);  // Force update
+
+         let detectionRange = 0.08;
+         if (boat.position.distanceTo(obstacle.position) < detectionRange) {    //simple position based collision detect
+             console.log("hit");
+             handleBoatCollision();
+         }
+     };
+
     if (boat.position.distanceTo(heart.position) < 0.08) {
-      text = "Life+1";
-      setTimeout(() => {
-        text = "";
-      }, 1000);
-      heart.position.set(0, 10, 0); // Hide it
-      heart.visible = false;
-      boatLives++; // 🎯 Increase life
+        text = "Life+1";
+        setTimeout(() => {    text = "";}, 1000)
+        heart.position.set(0, 10, 0); // Hide it
+        heart.visible = false;
+        boatLives++; // 🎯 Increase life
     }
 
     if (boat.position.distanceTo(power.position) < 0.08) {
-      text = "Rush!!Just keep going forward!";
-      setTimeout(() => {
-        text = "";
-      }, 10000);
-      power.position.set(0, 10, 0); // Hide it
-      power.visible = false;
+        text = "Rush!!Just keep going forward!";
+        setTimeout(() => {    text = "";}, 10000)
+        power.position.set(0, 10, 0); // Hide it
+        power.visible = false;
 
-      // 🎯 Apply power-up effect
-      maxSpeed *= 2; // 🚀 Double acceleration
-      acceleration *= 2; // 🚀 Double acceleration
-      isImmune = true;
-      setTimeout(() => {
-        maxSpeed /= 2;
-        acceleration /= 2;
-        isImmune = false;
-      }, 10000);
+        // 🎯 Apply power-up effect
+        maxSpeed *= 2; // 🚀 Double acceleration
+        acceleration *= 2; // 🚀 Double acceleration
+        isImmune = true;
+        setTimeout(() => {
+            maxSpeed /= 2;
+            acceleration /=2;
+            isImmune = false;
+        }, 10000)
     }
     // 🎯 Detect Level
-    distanceTraveled += movementX.x;
+    distanceTraveled-=movementZ.z;
     if (distanceTraveled >= levelTreshold) {
-      level++; // Increase level
-      resetLevel();
+        level++; // Increase level
+        resetLevel();    
     }
 
     if (unusedObstacles.length > 10) {
-      respawnObstacles();
+        respawnObstacles();
     }
 
-    // 🎯 **Update HUD Text**
-    // document.getElementById("directionText").innerText =
+    // // 🎯 **Update HUD Text**
+    // document.getElementById("directionText").innerText = 
     // `Life: ${boatLives}\n` +
     // `Level: ${level}\n` +
-    // `Distance till exit: ${(levelTreshold-distanceTraveled).toFixed(1)}\n`
+    // `Distance till exit: ${(levelTreshold-distanceTraveled).toFixed(1)}\n` 
     // ;
 
-    // 🎯 **Update Centered Text**
+    // // 🎯 **Update Centered Text**
     // document.getElementById("centerText").innerText = text;
     // document.getElementById("centerText").style.display = text ? "block" : "none"; // Show if text is not empty
-    // `Score: ${score}\n` +
-    // `Position: (${boat.position.x.toFixed(2)}, ${boat.position.y.toFixed(2)}, ${boat.position.z.toFixed(2)})\n` +
-    // `Velocity: ${velocity.toFixed(2)}`;
 
-    // 🎥 **Handle Free Camera Mode**   // could be deleted in the end
-    if (movement.freeCamera) {
-      // Move the camera to (0,10,0) and make it look at the boat
-      camera.lookAt(boat.position);
-    } else {
-      // 🎯 **Make Camera Look Ahead in Boat’s Moving Direction**
-      const lookAhead = boat.position
-        .clone()
-        .add(direction.clone().multiplyScalar(10));
-      camera.lookAt(lookAhead);
-
-      // Make the camera follow the boat
-      const cameraOffset = direction.clone().multiplyScalar(-0.3);
-      cameraOffset.y = 0.2;
-      const offsetPosition = boat.position.clone().add(cameraOffset);
-      camera.position.lerp(offsetPosition, 0.3); // Smooth camera movement
-    }
-  }
+   
+}
 
   renderer.render(scene, camera);
 }
@@ -1715,10 +1681,9 @@ function updateObstacles() {
   let moveX = 0;
   let moveZ = 0;
 
-  if (keys.w) moveZ -= moveSpeed; // Move forward
-  if (keys.s) moveZ += moveSpeed; // Move backward
-  if (keys.a) moveX -= moveSpeed; // Move left
-  if (keys.d) moveX += moveSpeed; // Move right
+  if (movement.forward) moveZ += moveSpeed; // Move forward
+  if (movement.left) moveX -= moveSpeed; // Move left
+  if (movement.right) moveX += moveSpeed; // Move right
 
   // Apply movement to all obstacle objects
   if (moveX !== 0 || moveZ !== 0) {
