@@ -19,40 +19,15 @@
 // ********************************** SCENE SETUP + DEPENDENCIES **********************************
 // ************************************************************************************************
 // DEPENDENCIES
-import * as dat from "dat.gui"; // GUI
-import Stats from "stats.js"; // FPS counter
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
+import { MTLLoader } from "three/examples/jsm/loaders/MTLLoader";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader";
-import { mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
-(function () {
-  var script = document.createElement("script");
-  script.onload = function () {
-    var stats = new Stats();
-    document.body.appendChild(stats.dom);
-    requestAnimationFrame(function loop() {
-      stats.update();
-      requestAnimationFrame(loop);
-    });
-  };
-  script.src = "https://mrdoob.github.io/stats.js/build/stats.min.js";
-  document.head.appendChild(script);
-})();
 // Scene setup
 // import { compute, step } from 'three/tsl';
 
 const scene = new THREE.Scene();
 const textureLoader = new THREE.TextureLoader();
-
-// background image
-textureLoader.load(
-  "assets/background_image/light_trails_1.jpg",
-  function (texture) {
-    texture.colorSpace = THREE.SRGBColorSpace;
-    texture.minFilter = THREE.LinearFilter;
-    scene.background = texture;
-  }
-);
 
 //THREE.PerspectiveCamera( fov angle, aspect ratio, near depth, far depth );
 const camera = new THREE.PerspectiveCamera(
@@ -65,544 +40,227 @@ const camera = new THREE.PerspectiveCamera(
 const renderer = new THREE.WebGLRenderer();
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
-renderer.setClearColor(0x87ceeb);
-document.body.addEventListener("keydown", (event) => {
+
+let text = "3";
+let movementAllowed = false;
+const startScreenElement = document.getElementById("startScreen");
+const centerTextElement = document.getElementById("centerText");
+const gameTextElement = document.getElementById("gameText");
+
+window.addEventListener("keydown", (event) => {
+  if (startScreenElement.style.display === "none") return;
   if (event.key === " ") {
-    document.getElementById("startScreen").style.display = "none";
-    document.body.appendChild(renderer.domElement);
+    startScreenElement.style.display = "none";
+    gameTextElement.style.display = "block";
+    document.body.prepend(renderer.domElement);
+    setTimeout(() => {
+      text = "2";
+    }, 1000);
+    setTimeout(() => {
+      text = "1";
+    }, 2000);
+    setTimeout(() => {
+      text = "GO!";
+      movementAllowed = true;
+    }, 3000);
+    setTimeout(() => {
+      text = "";
+    }, 4000);
   }
 });
 
-// ADD FPS COUNTER
-const stats = new Stats();
-stats.showPanel(0);
-document.body.appendChild(stats.dom);
-
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
-controls.minDistance = 1;
-controls.maxDistance = 3;
-// camera.position.set(1.5, 1.5, 1.5);
-// controls.target.set(0, 0, 0);
-// 2D testing
 camera.position.set(0.5, 0.5, 3);
 controls.target.set(0.5, 0, 1.5);
-
-// // Rendering 3D axis
-// const createAxisLine = (color, start, end) => {
-//     const geometry = new THREE.BufferGeometry().setFromPoints([start, end]);
-//     const material = new THREE.LineBasicMaterial({ color: color });
-//     return new THREE.Line(geometry, material);
-// };
-// const xAxis = createAxisLine(0xff0000, new THREE.Vector3(0, 0, 0), new THREE.Vector3(3, 0, 0)); // Red
-// const yAxis = createAxisLine(0x00ff00, new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 3, 0)); // Green
-// const zAxis = createAxisLine(0x0000ff, new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, 3)); // Blue
-// scene.add(xAxis);
-// scene.add(yAxis);
-// scene.add(zAxis);
 
 // Setting up the lights
 const pointLight = new THREE.PointLight(0xffffff, 100, 100);
 pointLight.position.set(5, 5, 5); // Position the light
 scene.add(pointLight);
 
-// const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-// directionalLight.position.set(0.5, .0, 1.0).normalize();
-const directionalLight = new THREE.DirectionalLight();
-directionalLight.position.set(10, 10, 10);
-directionalLight.castShadow = true;
-directionalLight.shadow.camera.near = 0.1;
-directionalLight.shadow.camera.far = 1000;
-directionalLight.shadow.camera.right = 10;
-directionalLight.shadow.camera.left = -10;
-directionalLight.shadow.camera.top = 10;
-directionalLight.shadow.camera.bottom = -10;
-scene.add(directionalLight);
-
-let poolBoundaries = null;
-// Function to create a swimming pool-like structure
-function createSwimmingPool(width, height, depth, wallThickness) {
-  // Create a rectangular shape for the base
-  poolBoundaries = {
-    minX: -2,
-    maxX: width,
-    minZ: -depth / 2,
-    maxZ: depth / 2,
-  };
-
-  const poolMaterial = new THREE.ShaderMaterial({
-    uniforms: {
-      color1: { value: new THREE.Color(0x1e90ff) }, // Light Blue
-      color2: { value: new THREE.Color(0x0000ff) }, // Dark Blue
-      stripeWidth: { value: 10.0 }, // Width of each stripe in world units
-    },
-    vertexShader: `
-            varying vec3 vPosition;
-            void main() {
-                vPosition = position; // Pass position to fragment shader
-                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-            }
-        `,
-    fragmentShader: `
-            uniform vec3 color1;
-            uniform vec3 color2;
-            uniform float stripeWidth;
-            varying vec3 vPosition;
-            
-            void main() {
-                // Create stripes based on the world X-coordinate
-                float stripes = mod(floor(vPosition.x / stripeWidth), 2.0);
-                gl_FragColor = vec4(mix(color1, color2, stripes), 1.0);
-            }
-        `,
-    side: THREE.DoubleSide, // Ensure it renders from both sides
-  });
-
-  const shape = new THREE.Shape();
-  shape.moveTo(-width / 2, -depth / 2);
-  shape.lineTo(width / 2, -depth / 2);
-  shape.lineTo(width / 2, depth / 2);
-  shape.lineTo(-width / 2, depth / 2);
-  shape.lineTo(-width / 2, -depth / 2);
-
-  // Extrude walls upwards
-  const extrudeSettings = {
-    depth: height, // Pool depth (walls height)
-    bevelEnabled: false, // No bevel
-  };
-
-  // Generate the pool geometry
-  const poolGeometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-  // const poolMaterial = new THREE.MeshStandardMaterial({ color: 0x1E90FF, side: THREE.DoubleSide }); // Blue color like water
-  const poolMesh = new THREE.Mesh(poolGeometry, poolMaterial);
-
-  // Position the pool
-  poolMesh.rotation.x = -Math.PI / 2; // Rotate to stand upright
-  poolMesh.position.set(width / 2, -height, 0); // Lower into the ground
-
-  scene.add(poolMesh);
-  return poolMesh;
-}
-createSwimmingPool(3, 0.1, 1, 0.1);
-
 let obstacles = [];
-let boat = null;
-let heart = null;
-let power = null;
-const objLoader = new OBJLoader();
+let boat;
+let heart;
+let power;
 let unusedObstacles = [];
 let activeObstacles = [];
 
-const ambientLight = new THREE.AmbientLight("rgb(178, 125, 1)", 4); // Soft white light //0x505050
+const ambientLightColors = [
+  new THREE.Color("rgb(255, 200, 97)"), // Ancient Egypt
+  new THREE.Color("rgb(120, 160, 90)"), // Jurassic Age
+  new THREE.Color("rgb(210, 120, 185)"), // Ancient Japan
+  new THREE.Color("rgb(100, 150, 255)"), // Future
+];
+
+const ambientLight = new THREE.AmbientLight(ambientLightColors[0], 4);
 scene.add(ambientLight);
-
-const phong_material = new THREE.MeshPhongMaterial({
-  color: 0x00ff00, // Green color
-  shininess: 100, // Shininess of the material
-});
-
-const ground = new THREE.Mesh(
-  new THREE.PlaneGeometry(1000, 1000),
-  new THREE.MeshPhongMaterial({ color: 0x2e8b57 })
-);
-ground.rotation.x = -Math.PI / 2;
-ground.position.y = -1;
-ground.receiveShadow = true;
-scene.add(ground);
-
-const waterLevelGeometry = new THREE.PlaneGeometry();
-const waterLevelMaterial = new THREE.MeshBasicMaterial({
-  color: 0x00ffff,
-  transparent: true,
-  opacity: 0.5,
-});
-const waterLevelMesh = new THREE.Mesh(waterLevelGeometry, waterLevelMaterial);
-waterLevelMesh.rotation.x = -Math.PI / 2;
-waterLevelMesh.visible = false;
-scene.add(waterLevelMesh);
 // **************************************************************************************************
 
 // **************************************************************************************************
 // *********************************** OBJECT LOADING ***********************************************
 // **************************************************************************************************
-function generateRandomGeometry() {
-  const geometries = [
-    new THREE.BoxGeometry(
-      Math.random() / 3,
-      Math.random() / 3,
-      Math.random() / 3
-    ),
-    new THREE.CapsuleGeometry(Math.random() / 3, Math.random() / 3),
-    new THREE.CylinderGeometry(
-      Math.random() / 3,
-      Math.random() / 3,
-      Math.random() / 3
-    ),
-    new THREE.DodecahedronGeometry(Math.random() / 3),
-    new THREE.IcosahedronGeometry(Math.random() / 3),
-    new THREE.OctahedronGeometry(Math.random() / 3),
-    new THREE.TetrahedronGeometry(Math.random() / 3),
-  ];
-
-  return geometries[Math.floor(Math.random() * geometries.length)];
-}
-
-function generateRandomPosition() {
-  let randomX = Math.random() * 2 - 1;
-  while (Math.abs(randomX) < 0.5) randomX = Math.random() * 2 - 1;
-  let randomZ = Math.random() * 2 - 1;
-  while (Math.abs(randomZ) < 0.5) randomZ = Math.random() * 2 - 1;
-  return new THREE.Vector3(randomX, 0, randomZ);
-}
-
-const obstaclesArr = [];
-const normalsMap = new Map();
-const verticesMap = new Map();
-const NUM_OBSTACLES = 10;
-const tempVector = new THREE.Vector3();
-
-for (let i = 0; i < NUM_OBSTACLES; i++) {
-  const obstacle = new THREE.Mesh(
-    generateRandomGeometry(),
-    new THREE.MeshPhongMaterial({
-      color: new THREE.Color().setHSL(Math.random(), 1, 0.5),
-    })
-  );
-  obstacle.castShadow = true;
-  obstacle.receiveShadow = true;
-  const randomPosition = generateRandomPosition();
-  obstacle.position.set(randomPosition.x, 0, randomPosition.z);
-  scene.add(obstacle);
-  obstaclesArr.push(obstacle);
-  normalsMap.set(obstacle, getNormals(obstacle));
-  verticesMap.set(obstacle, getVertices(obstacle));
-}
-
-let player;
-let playerCollisionMesh;
-
-// file: name of the obj file
-// bbDimensions: dimensions of the bounding box of the object
-// bbOffset: offset of the bounding box from the center of the object
-// position: position of the object
-// scale: scale of the object
-// rotation: rotation of the object
-// color: color of the object
-// meshVisible: whether the object's collision mesh is visible
-// isPlayer: whether the object is the player (only one object can be the player)
 function loadObj({
+  mtlFile,
   file,
   position = new THREE.Vector3(),
   scale = new THREE.Vector3(1, 1, 1),
   rotation = new THREE.Euler(),
-  color = new THREE.Color(0x776947),
-  copies = 0,
-  type = "",
+  color = new THREE.Color(0xffffff),
+  type,
+  copies = 1,
 }) {
-  objLoader.load(file, (object) => {
+  const objLoader = new OBJLoader();
+  const mtlLoader = new MTLLoader();
+
+  const onLoadObject = (object) => {
     object.position.copy(position);
     object.scale.copy(scale);
     object.rotation.copy(rotation);
     object.updateMatrixWorld(true);
 
-    if (type == "player") {
-      boat = object;
-    }
-    if (type == "heart") {
+    if (type === "player") boat = object;
+    if (type === "heart") {
       heart = object;
       heart.visible = false;
     }
-    if (type == "speed") {
+    if (type === "power") {
       power = object;
       power.visible = false;
     }
 
-    let modelTemplate = null;
+    let modelTemplate;
     object.traverse((child) => {
       if (child.isMesh) {
         modelTemplate = child;
-        child.geometry = mergeVertices(child.geometry);
-        child.material = new THREE.MeshPhongMaterial({ color });
+        // child.geometry = mergeVertices(child.geometry);
+
+        if (!mtlFile) child.material = new THREE.MeshPhongMaterial({ color });
+
         child.castShadow = true;
         child.receiveShadow = true;
       }
     });
 
     if (copies > 1) {
-      // 🚀 Create multiple separate objects instead of using InstancedMesh
       for (let i = 0; i < copies; i++) {
-        const clone = modelTemplate.clone(); // Clone the mesh
+        const clone = modelTemplate.clone();
         clone.position.set(0, 10, 0);
         clone.scale.copy(scale);
         clone.rotation.copy(rotation);
         clone.castShadow = true;
         clone.receiveShadow = true;
 
-        if (type == "obstacle") {
+        if (type === "obstacle") {
           obstacles.push(clone);
           unusedObstacles.push(clone);
         }
-        scene.add(clone); // Add each obstacle separately
+        scene.add(clone);
       }
     } else {
-      // 🚀 **For single objects, load normally**
-      scene.add(object);
-      if (type == "obstacle") {
+      if (type === "obstacle") {
         obstacles.push(object);
         unusedObstacles.push(object);
       }
+      scene.add(object);
     }
-  });
+  };
+
+  if (mtlFile) {
+    mtlLoader.load(mtlFile, (materials) => {
+      materials.preload();
+      objLoader.setMaterials(materials);
+      objLoader.load(file, onLoadObject);
+    });
+  } else objLoader.load(file, onLoadObject);
 }
 
-let boatOffset = new THREE.Vector3(0.5, 0.3, 2.8);
+let boatPosition = new THREE.Vector3(0.5, 0.3, 2.8);
 const objectsToLoad = [
-  //The boat, the heart, and the power-up
   {
     file: "boat.obj",
-    position: boatOffset,
+    position: boatPosition,
     scale: new THREE.Vector3(0.0005, 0.0005, 0.0005),
-    rotation: new THREE.Euler(-1.57, 0, 1.57),
+    rotation: new THREE.Euler(-Math.PI / 2, 0, Math.PI / 2),
     color: new THREE.Color(0xb5823c),
-    type: "player", // Mark the boat as the player
+    type: "player",
   },
   {
     file: "heart.obj",
     position: new THREE.Vector3(1, 10, 0.5),
     scale: new THREE.Vector3(0.005, 0.005, 0.005),
-    rotation: new THREE.Euler(-1.57, 0, 1.57),
+    rotation: new THREE.Euler(-Math.PI / 2, 0, Math.PI / 2),
     color: new THREE.Color(0xff0000),
     type: "heart",
   },
   {
-    file: "lightning.obj",
+    file: "power.obj",
     position: new THREE.Vector3(1, 10, 0),
     scale: new THREE.Vector3(0.02, 0.02, 0.02),
-    rotation: new THREE.Euler(-1.57, 0, 1.57),
+    rotation: new THREE.Euler(-Math.PI / 2, 0, Math.PI / 2),
     color: new THREE.Color(0xffff66),
-    type: "speed",
+    type: "power",
   },
 ];
+
+const levelObstacleOffsets = [0.15, 0.2, 0.15, 0.15];
 
 const levelObstacles = [
-  //for each level, right now all just hectagons
   {
-    file: "hectagon.obj", //acient egypt
+    mtlFile: "sphinx/10085_egypt_sphinx_iterations-2.mtl", // Ancient Egypt
+    file: "sphinx/10085_egypt_sphinx_iterations-2.obj",
     position: new THREE.Vector3(1, 10, 0),
-    scale: new THREE.Vector3(0.012, 0.012, 0.05),
-    rotation: new THREE.Euler(-1.57, 0, 1.57),
-    color: new THREE.Color(0xffe54f),
+    scale: new THREE.Vector3(0.0001, 0.0001, 0.0001),
+    rotation: new THREE.Euler(-Math.PI / 2, 0, 0),
     type: "obstacle",
     copies: 20,
   },
   {
-    //jurastic
-    file: "hectagon.obj",
+    mtlFile: "dinosaur/13623_Quetzalcoatlus_v1_L2.mtl", // Jurassic Age
+    file: "dinosaur/13623_Quetzalcoatlus_v1_L2.obj",
     position: new THREE.Vector3(1, 10, 0),
-    scale: new THREE.Vector3(0.012, 0.012, 0.05),
-    rotation: new THREE.Euler(-1.57, 0, 1.57),
-    color: new THREE.Color(0x336600),
+    scale: new THREE.Vector3(0.001, 0.001, 0.001),
+    rotation: new THREE.Euler(-Math.PI / 2, 0, 0),
     type: "obstacle",
     copies: 20,
   },
   {
-    //dark ages
-    file: "hectagon.obj",
+    mtlFile: "temple/Model/Japanese_Temple.mtl", // Ancient Japan
+    file: "temple/Model/Japanese_Temple.obj",
     position: new THREE.Vector3(1, 10, 0),
-    scale: new THREE.Vector3(0.012, 0.012, 0.05),
-    rotation: new THREE.Euler(-1.57, 0, 1.57),
-    color: new THREE.Color(0x404040),
+    scale: new THREE.Vector3(0.01, 0.01, 0.01),
     type: "obstacle",
     copies: 20,
   },
   {
-    //future-cyberpunk
-    file: "hectagon.obj",
+    mtlFile: "robot/12211_Robot_l2.mtl", // Future
+    file: "robot/12211_Robot_l2.obj",
     position: new THREE.Vector3(1, 10, 0),
-    scale: new THREE.Vector3(0.012, 0.012, 0.05),
-    rotation: new THREE.Euler(-1.57, 0, 1.57),
-    color: new THREE.Color(0xcc99ff),
+    scale: new THREE.Vector3(0.01, 0.01, 0.01),
+    rotation: new THREE.Euler(Math.PI / 2, Math.PI, 0),
     type: "obstacle",
     copies: 20,
   },
 ];
 
-// 🎯 Load all objects
 loadObj(levelObstacles[0]);
 objectsToLoad.forEach((obj) => loadObj(obj));
 
 window.addEventListener("keydown", (event) => {
+  if (!movementAllowed) return;
   if (event.key === "w") movement.forward = true;
   if (event.key === "s") movement.brake = true;
   if (event.key === "a") movement.left = true;
   if (event.key === "d") movement.right = true;
-  if (event.key === " ") {
-    if (document.getElementById("startScreen").style.display === "none") return;
-    //temporary restart
-    movement.freeCamera = !movement.freeCamera;
-    boat.position.copy(boatOffset);
-    velocity = 0;
-    camera.position.lerp(new THREE.Vector3(-0.2, 0.2, 0), 0.1);
-    controls.enableRotate = true; // Allow rotation
-    controls.enablePan = true; // Allow panning
-    controls.enableZoom = true; // Allow zooming
-  }
 });
 
 window.addEventListener("keyup", (event) => {
+  if (!movementAllowed) return;
   if (event.key === "w") movement.forward = false;
-  if (event.key === "s") movement.brake = false; //there's no turning back
+  if (event.key === "s") movement.brake = false;
   if (event.key === "a") movement.left = false;
   if (event.key === "d") movement.right = false;
-  // if (event.key === ' ') movement.freeCamera = !movement.freeCamera;
 });
-
-// **************************************************************************************************
-// *********************************** SAT COLLISION DETECTION **************************************
-// **************************************************************************************************
-function positiveVectorKey(vector) {
-  return `${Math.round(vector.x * 1000)},${Math.round(
-    vector.y * 1000
-  )},${Math.round(vector.z * 1000)}`;
-}
-
-function negativeVectorKey(vector) {
-  return `${Math.round(-vector.x * 1000)},${Math.round(
-    -vector.y * 1000
-  )},${Math.round(-vector.z * 1000)}`;
-}
-
-function getNormals(object) {
-  const normalsAttribute = object.geometry.getAttribute("normal");
-  const unique = new Set();
-  const normals = [];
-
-  object.updateMatrixWorld(true);
-
-  for (let i = 0; i < normalsAttribute.count; i++) {
-    tempVector
-      .fromBufferAttribute(normalsAttribute, i)
-      .applyMatrix4(object.matrixWorld.invert().transpose())
-      .normalize();
-    const positiveKey = positiveVectorKey(tempVector);
-    const negativeKey = negativeVectorKey(tempVector);
-    if (unique.has(positiveKey) || unique.has(negativeKey)) continue;
-    unique.add(positiveKey);
-    unique.add(negativeKey);
-    normals.push(tempVector.clone());
-  }
-
-  return normals;
-}
-
-function getVertices(object) {
-  const verticesAttribute = object.geometry.getAttribute("position");
-  const vertices = [];
-
-  for (let i = 0; i < verticesAttribute.count; i++) {
-    tempVector
-      .fromBufferAttribute(verticesAttribute, i)
-      .applyMatrix4(object.matrixWorld);
-    vertices.push(tempVector.clone());
-  }
-
-  return vertices;
-}
-
-function checkCollision(playerCollisionMesh, obstacle) {
-  let minOverlap = Infinity;
-  let minAxis;
-
-  const allAxes = removeDuplicates([
-    ...normalsMap.get(playerCollisionMesh),
-    ...normalsMap.get(obstacle),
-  ]);
-
-  for (const axis of allAxes) {
-    const projection1 = getProjection(playerCollisionMesh, axis);
-    const projection2 = getProjection(obstacle, axis);
-
-    if (
-      projection1.max <= projection2.min ||
-      projection2.max <= projection1.min
-    )
-      return;
-
-    const overlap = Math.min(
-      projection1.max - projection2.min,
-      projection2.max - projection1.min
-    );
-
-    if (overlap < minOverlap) {
-      minOverlap = overlap;
-      minAxis = axis;
-    }
-  }
-
-  return { minAxis, minOverlap };
-}
-
-function removeDuplicates(normals) {
-  const unique = new Set();
-
-  return normals.filter((normal) => {
-    const positiveKey = positiveVectorKey(normal);
-    const negativeKey = negativeVectorKey(normal);
-    if (unique.has(positiveKey) || unique.has(negativeKey)) return false;
-    unique.add(positiveKey);
-    unique.add(negativeKey);
-    return true;
-  });
-}
-
-function getProjection(object, axis) {
-  if (object === playerCollisionMesh)
-    verticesMap.set(playerCollisionMesh, getVertices(playerCollisionMesh));
-
-  const vertices = verticesMap.get(object);
-  let min = Infinity;
-  let max = -Infinity;
-
-  for (const vertex of vertices) {
-    const dot = axis.dot(vertex);
-    min = Math.min(min, dot);
-    max = Math.max(max, dot);
-  }
-
-  return { min, max };
-}
-// **************************************************************************************************
-
-// **************************************************************************************************
-// *********************************** BOAT MOVEMENT ************************************************
-// **************************************************************************************************
-const keys = {
-  w: false,
-  s: false,
-  a: false,
-  d: false,
-  " ": false,
-  shift: false,
-};
-
-window.addEventListener("keydown", (e) => {
-  if (e.key.toLowerCase() in keys) keys[e.key.toLowerCase()] = true;
-});
-
-window.addEventListener("keyup", (e) => {
-  if (e.key.toLowerCase() in keys) keys[e.key.toLowerCase()] = false;
-});
-
-let boatVelocity = 0;
-let hasImmunity = false;
-// const ACCELERATION = 0.002;
-// const ROTATION_SPEED = 0.05;
-// const FRICTION = 0.99;
-// const COLLISION_CHECK_RADIUS = 1;
-const boatDirection = new THREE.Vector3(0, 0, -1);
-const toObstacle = new THREE.Vector3();
-
-// **************************************************************************************************
 
 // **************************************************************************************************
 // *********************************** OBSTACLE OBJECTS IN SCENE ************************************
@@ -610,7 +268,7 @@ const toObstacle = new THREE.Vector3();
 let animation_time = 0;
 
 // ARRAY OF OBSTACLE MESHES - used to calculate interactions with fluid based on obstacle positions
-let obstacle_objects_in_scene = []; // *** ADD ALL OBSTACLES CURRENTLY IN THE SCENE TO THIS ARRAY FOR FLUID TO INTERACT WITH IT
+// let obstacle_objects_in_scene = []; // *** ADD ALL OBSTACLES CURRENTLY IN THE SCENE TO THIS ARRAY FOR FLUID TO INTERACT WITH IT
 
 // EXAMPLE OBSTACLES - generate some random boxes and control their movement with the keyboard
 // const boxGeometry = new THREE.BoxGeometry(0.15, 0.4, 0.15);
@@ -643,7 +301,7 @@ let obstacle_objects_in_scene = []; // *** ADD ALL OBSTACLES CURRENTLY IN THE SC
 // PARAMETERS CONTROLLABLE IN GUI
 var params = {
   // FLUID VISULIZATION
-  point_radius: 0.04, // 0.08 nice visually with Gaussian Sprite material
+  point_radius: 0.12, // 0.08 nice visually with Gaussian Sprite material
   point_opacity: 0.7, // 0.6 nice visually
   show_neighbor_search: false,
 
@@ -666,7 +324,7 @@ var params = {
   show_water_level: false, // Show the water level
 
   // OBJECTS THAT INTERACT WITH FLUID
-  object_interaction_strength: 0.35, // previously 0.2
+  object_interaction_strength: 0.15, // previously 0.2
   interaction_length_scale: 1,
 };
 
@@ -928,7 +586,7 @@ fadeDisplacementEdges(
 
 const wallDepth = 5; // Thickness of wall extension
 const wallHeight = 0.6; // Height of walls (-0.3 to 0.3)
-const wallLength = 6; // Extends from z = -3 to z = 3
+const wallLength = 7; // Extends from z = -3 to z = 3
 
 // Create LEFT WALL (Top-facing and Side-facing)
 const rock_wall_buffer = rockDisplacementScale - 0.1;
@@ -950,20 +608,20 @@ rightWallTop.position.set(3.5 + rock_wall_buffer, 0.3, 0);
 scene.add(rightWallTop);
 
 const leftWallSide = new THREE.Mesh(
-  new THREE.PlaneGeometry(wallLength, wallHeight, 100, 100),
+  new THREE.PlaneGeometry(wallLength, wallHeight + 1, 100, 100),
   rockMaterial_inner
 ); // -> change side material for scrolling / tiling?
 leftWallSide.rotation.y = Math.PI / 2; // Face inwards
-leftWallSide.position.set(0 - rock_wall_buffer, 0, 0); // Align with side
+leftWallSide.position.set(0 - rock_wall_buffer, -0.5, 0); // Align with side
 scene.add(leftWallSide);
 
 const rightWallSide = new THREE.Mesh(
-  new THREE.PlaneGeometry(wallLength, wallHeight, 100, 100),
+  new THREE.PlaneGeometry(wallLength, wallHeight + 1, 100, 100),
   rockMaterial_inner
 );
 rightWallSide.rotation.y = -Math.PI / 2; // Face inwards
 rightWallSide.rotation.x = Math.PI; // Scroll in correct direction
-rightWallSide.position.set(1 + rock_wall_buffer, 0, 0);
+rightWallSide.position.set(1 + rock_wall_buffer, -0.5, 0);
 scene.add(rightWallSide);
 
 const bottomWall = new THREE.Mesh(
@@ -1036,7 +694,7 @@ for (let i = 0; i < num_fluid_points; i++) {
   ); // Scale sprite to match sphere size
   fluid_points[i].position.set(
     Math.random() * 0.3 + 0.5,
-    Math.random() * 0.4 + 0.2,
+    Math.random() * 0.3,
     Math.random() * 1 + 1.5
   );
   scene.add(fluid_points[i]);
@@ -1102,30 +760,30 @@ set_up_boundary_points(num_points_per_side, true);
 // ************************************************************************************
 // ****************************** GUI FOR TESTING VALUES ******************************
 // ************************************************************************************
-const gui = new dat.GUI();
+// const gui = new dat.GUI();
 
-// POINT VISUALIZATION
-const VisualsFolder = gui.addFolder("Fluid Visuals");
-VisualsFolder.add(params, "point_radius", 0.005, 0.2)
-  .name("Point Radius")
-  .onChange((newRadius) => {
-    //     fluid_points.forEach((sphere) => {
-    //         sphere.geometry.dispose(); // Dispose old geometry
-    //         sphere.geometry = new THREE.SphereGeometry(newRadius); // Create new geometry
-    //     });
-    // });
-    fluid_points.forEach((point) => {
-      point.scale.set(newRadius * 2, newRadius * 2, 1); // Scale sprite to match sphere size
-    });
-    mirror_points.forEach((point) => {
-      point.scale.set(newRadius * 2, newRadius * 2, 1); // Scale sprite to match sphere size
-    });
-    stationary_points.forEach((point) => {
-      point.scale.set(newRadius * 2, newRadius * 2, 1); // Scale sprite to match sphere size
-    });
-  });
-VisualsFolder.add(fluid_material, "opacity", 0, 1).name("Point Opacity");
-VisualsFolder.add(params, "show_neighbor_search").name("Show Neighbor Search?");
+// // POINT VISUALIZATION
+// const VisualsFolder = gui.addFolder("Fluid Visuals");
+// VisualsFolder.add(params, "point_radius", 0.005, 0.2)
+//   .name("Point Radius")
+//   .onChange((newRadius) => {
+//     //     fluid_points.forEach((sphere) => {
+//     //         sphere.geometry.dispose(); // Dispose old geometry
+//     //         sphere.geometry = new THREE.SphereGeometry(newRadius); // Create new geometry
+//     //     });
+//     // });
+//     fluid_points.forEach((point) => {
+//       point.scale.set(newRadius * 2, newRadius * 2, 1); // Scale sprite to match sphere size
+//     });
+//     mirror_points.forEach((point) => {
+//       point.scale.set(newRadius * 2, newRadius * 2, 1); // Scale sprite to match sphere size
+//     });
+//     stationary_points.forEach((point) => {
+//       point.scale.set(newRadius * 2, newRadius * 2, 1); // Scale sprite to match sphere size
+//     });
+//   });
+// VisualsFolder.add(fluid_material, "opacity", 0, 1).name("Point Opacity");
+// VisualsFolder.add(params, "show_neighbor_search").name("Show Neighbor Search?");
 
 // Function to update material color
 function updateFluidColor() {
@@ -1136,91 +794,91 @@ function updateFluidColor() {
 }
 
 // Add RGB sliders to GUI
-VisualsFolder.add(colorParams, "r", 0, 1)
-  .name("fluid R")
-  .onChange(updateFluidColor);
-VisualsFolder.add(colorParams, "g", 0, 1)
-  .name("fluid G")
-  .onChange(updateFluidColor);
-VisualsFolder.add(colorParams, "b", 0, 1)
-  .name("fluid B")
-  .onChange(updateFluidColor);
+// VisualsFolder.add(colorParams, "r", 0, 1)
+//   .name("fluid R")
+//   .onChange(updateFluidColor);
+// VisualsFolder.add(colorParams, "g", 0, 1)
+//   .name("fluid G")
+//   .onChange(updateFluidColor);
+// VisualsFolder.add(colorParams, "b", 0, 1)
+//   .name("fluid B")
+//   .onChange(updateFluidColor);
 
-VisualsFolder.open();
+// VisualsFolder.open();
 
-// BOUNDARY VISUALIZATION
-const BoundaryFolder = gui.addFolder("Boundaries");
-BoundaryFolder.add(params, "boundary_box_width", 0.1, 1)
-  .name("Box Width")
-  .onChange((newSize) => {
-    // initialize at max in GUI as I don't want to update hashing declaration yet
-    line.geometry.dispose();
-    boundary_geometry = new THREE.BoxGeometry(
-      newSize,
-      1,
-      params.boundary_box_length
-    );
-    boundary_wireframe = new THREE.WireframeGeometry(boundary_geometry);
-    line.geometry = boundary_wireframe;
-    line.position.set(newSize / 2, 0.5, params.boundary_box_length / 2);
-    // set_up_boundary_points(num_points_per_side);
-  });
-BoundaryFolder.add(params, "boundary_box_length", 0.1, 3)
-  .name("Box Length")
-  .onChange((newSize) => {
-    // initialize at max in GUI as I don't want to update hashing declaration yet
-    line.geometry.dispose();
-    boundary_geometry = new THREE.BoxGeometry(
-      params.boundary_box_width,
-      1,
-      newSize
-    );
-    boundary_wireframe = new THREE.WireframeGeometry(boundary_geometry);
-    line.geometry = boundary_wireframe;
-    line.position.set(params.boundary_box_width / 2, 0.5, newSize / 2);
-    // set_up_boundary_points(num_points_per_side);
-  });
-// BoundaryFolder.add(params, "boundary_point_size", 0.001, 0.05).name('Point Size').onChange((newSize) => {
-//     boundary_points.forEach((boundary_box) => {
-//         boundary_box.geometry.dispose(); // Dispose old geometry
-//         boundary_box.geometry = new THREE.BoxGeometry(newSize, newSize, newSize); // Create new geometry
-//     });
-// });
-// BoundaryFolder.add(boundary_material, "opacity", 0, 1).name('Point Opacity');
-BoundaryFolder.open();
+// // BOUNDARY VISUALIZATION
+// const BoundaryFolder = gui.addFolder("Boundaries");
+// BoundaryFolder.add(params, "boundary_box_width", 0.1, 1)
+//   .name("Box Width")
+//   .onChange((newSize) => {
+//     // initialize at max in GUI as I don't want to update hashing declaration yet
+//     line.geometry.dispose();
+//     boundary_geometry = new THREE.BoxGeometry(
+//       newSize,
+//       1,
+//       params.boundary_box_length
+//     );
+//     boundary_wireframe = new THREE.WireframeGeometry(boundary_geometry);
+//     line.geometry = boundary_wireframe;
+//     line.position.set(newSize / 2, 0.5, params.boundary_box_length / 2);
+//     // set_up_boundary_points(num_points_per_side);
+//   });
+// BoundaryFolder.add(params, "boundary_box_length", 0.1, 3)
+//   .name("Box Length")
+//   .onChange((newSize) => {
+//     // initialize at max in GUI as I don't want to update hashing declaration yet
+//     line.geometry.dispose();
+//     boundary_geometry = new THREE.BoxGeometry(
+//       params.boundary_box_width,
+//       1,
+//       newSize
+//     );
+//     boundary_wireframe = new THREE.WireframeGeometry(boundary_geometry);
+//     line.geometry = boundary_wireframe;
+//     line.position.set(params.boundary_box_width / 2, 0.5, newSize / 2);
+//     // set_up_boundary_points(num_points_per_side);
+//   });
+// // BoundaryFolder.add(params, "boundary_point_size", 0.001, 0.05).name('Point Size').onChange((newSize) => {
+// //     boundary_points.forEach((boundary_box) => {
+// //         boundary_box.geometry.dispose(); // Dispose old geometry
+// //         boundary_box.geometry = new THREE.BoxGeometry(newSize, newSize, newSize); // Create new geometry
+// //     });
+// // });
+// // BoundaryFolder.add(boundary_material, "opacity", 0, 1).name('Point Opacity');
+// BoundaryFolder.open();
 
-// FLUID PROPERTIES
-const FluidFolder = gui.addFolder("Fluid Properties");
-FluidFolder.add(params, "stiffness", 0.05, 5).name("stiffness");
-FluidFolder.add(params, "viscosity", 0, 700).name("viscosity");
-FluidFolder.add(params, "smoothing_radius", 0.02, 0.5).name("smoothing_radius");
-FluidFolder.add(params, "grav_strength", 0, 10).name("grav_strength");
-FluidFolder.add(params, "rest_density_factor", 0.6, 5).name("Rest Density");
-FluidFolder.open();
+// // FLUID PROPERTIES
+// const FluidFolder = gui.addFolder("Fluid Properties");
+// FluidFolder.add(params, "stiffness", 0.05, 5).name("stiffness");
+// FluidFolder.add(params, "viscosity", 0, 700).name("viscosity");
+// FluidFolder.add(params, "smoothing_radius", 0.02, 0.5).name("smoothing_radius");
+// FluidFolder.add(params, "grav_strength", 0, 10).name("grav_strength");
+// FluidFolder.add(params, "rest_density_factor", 0.6, 5).name("Rest Density");
+// FluidFolder.open();
 
-// BUOYANCY PROPERTIES
-const BuoyancyFolder = gui.addFolder("Buoyancy Properties");
-BuoyancyFolder.add(params, "buoyancy_strength", 0.1, 5).name(
-  "Buoyancy Strength"
-);
-BuoyancyFolder.add(params, "buoyancy_sample_points", 1, 100)
-  .name("Sample Points")
-  .step(1);
-BuoyancyFolder.add(params, "show_water_level").name("Show Water Level");
-BuoyancyFolder.open();
+// // BUOYANCY PROPERTIES
+// const BuoyancyFolder = gui.addFolder("Buoyancy Properties");
+// BuoyancyFolder.add(params, "buoyancy_strength", 0.1, 5).name(
+//   "Buoyancy Strength"
+// );
+// BuoyancyFolder.add(params, "buoyancy_sample_points", 1, 100)
+//   .name("Sample Points")
+//   .step(1);
+// BuoyancyFolder.add(params, "show_water_level").name("Show Water Level");
+// BuoyancyFolder.open();
 
-// OBJECT INTERACTION PROPERTIES
-const ObjectInteractionFolder = gui.addFolder("Object Interactions");
-ObjectInteractionFolder.add(
-  params,
-  "object_interaction_strength",
-  0.01,
-  1
-).name("strength");
-ObjectInteractionFolder.add(params, "interaction_length_scale", 0.5, 2).name(
-  "distance"
-);
-ObjectInteractionFolder.open();
+// // OBJECT INTERACTION PROPERTIES
+// const ObjectInteractionFolder = gui.addFolder("Object Interactions");
+// ObjectInteractionFolder.add(
+//   params,
+//   "object_interaction_strength",
+//   0.01,
+//   1
+// ).name("strength");
+// ObjectInteractionFolder.add(params, "interaction_length_scale", 0.5, 2).name(
+//   "distance"
+// );
+// ObjectInteractionFolder.open();
 // *********************************************************************************
 
 // **************************************************************************************************
@@ -1260,24 +918,27 @@ let start_indices = Array.from({ length: num_fluid_points }, () => maxInt); // e
 // ****************************************************************************************************
 // ****************************************** RENDER LOOP *********************************************
 // ****************************************************************************************************
-const ANGLE_OFFSET = 0.25;
+const ANGLE_OFFSET = Math.PI / 12;
 const COLLISION_CHECK_RADIUS = 0.1;
 const MAX_LIVES = 3;
-const IMMUNITY_DURATION = 2000;
-const POWER_DURATION = 10000;
+const IMMUNITY_DURATION = 1000;
+const POWER_DURATION = 5000;
+const COLLECTIBLE_DURATION = 1000;
 const LEVEL_DISTANCE_THRESHOLD = 25;
+const LEVEL_COMPLETE_DURATION = 3000;
 const up = new THREE.Vector3(0, 1, 0);
 const boatDimensions = new THREE.Vector3(
   0.08903854751586926,
   0.0800679512023927,
   0.25587545013427737
 );
+
 let direction = new THREE.Vector3(0, 0, -1);
 let velocity = 0;
 let maxSpeed = 0.025;
 let acceleration = 0.001;
 let distanceTraveled = 0;
-let level = 1;
+let level = 0;
 let isImmune = false;
 let isRocking = false;
 let boatLives = MAX_LIVES;
@@ -1287,44 +948,70 @@ const movement = {
   right: false,
   forward: false,
   brake: false,
-  freeCamera: false,
 };
 
 const physics = {
   targetY: 0.25,
-  minY: 0.15,
+  minY: 0.2,
   defaultY: 0.25,
-  maxY: 0.3,
   velocity: 0,
 };
 
+const timePeriods = [
+  "Ancient Egypt",
+  "Jurassic Age",
+  "Ancient Japan",
+  "Future",
+];
+
+const backgroundImages = [
+  "assets/background_image/light_trails_1.jpg",
+  "assets/background_image/light_trails_2.jpg",
+  "assets/background_image/galaxy_1.jpg",
+  "assets/background_image/black_hole.jpg",
+];
+
+const backgroundTextures = [];
+
+for (const backgroundImage of backgroundImages) {
+  textureLoader.load(backgroundImage, (texture) => {
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.minFilter = THREE.LinearFilter;
+    backgroundTextures.push(texture);
+  });
+}
+
+const waterColors = [
+  new THREE.Color("rgb(255, 100, 10)"), // Ancient Egypt
+  new THREE.Color("rgb(4, 93, 1)"), // Jurassic Age
+  new THREE.Color("rgb(255, 67, 151)"), // Ancient Japan
+  new THREE.Color("rgb(26, 169, 208)"), // Future
+];
+
 function handleCollision() {
   if (isImmune) return;
-
   if (!isRocking) animateRocking();
 
   isImmune = true;
+  setTimeout(() => {
+    isImmune = false;
+  }, IMMUNITY_DURATION);
 
   boatLives--;
   velocity = 0;
 
-  // TODO: review v
-  text = "START";
+  if (boatLives <= 0) {
+    text = "Game Over!";
+    gameTextElement.style.display = "none";
+    movementAllowed = false;
+    for (const prop in movement) movement[prop] = false;
+    return;
+  }
+
+  text = "Ouch!";
   setTimeout(() => {
     text = "";
-  }, 2000);
-  if (boatLives <= 0) {
-    text = "GAME OVER";
-    acceleration = 0;
-    // ROTATION_SPEED = 0;
-  } else {
-    text = "Ouch!";
-    document.getElementById("centerText").style.color = "red";
-    setTimeout(() => {
-      text = "";
-      document.getElementById("centerText").style.color = "white";
-    }, 2000);
-  }
+  }, IMMUNITY_DURATION);
 }
 
 function animateRocking() {
@@ -1350,32 +1037,26 @@ function animateRocking() {
     if (elapsedTime >= ROCKING_DURATION / 3) {
       clearInterval(animation);
       isRocking = false;
-      isImmune = true;
-
-      setTimeout(() => {
-        isImmune = false;
-      }, IMMUNITY_DURATION);
     }
   }, MS_PER_FRAME);
 }
 
-// TODO: review v
-let text = "3";
+function resetLevel() {
+  level++;
 
-if (document.getElementById("startScreen").style.display === "none") {
-  setTimeout(() => {
-    text = "2";
-  }, 1000);
-  setTimeout(() => {
-    text = "1";
-  }, 2000);
+  if (level === timePeriods.length) {
+    text = "Victory!";
+    gameTextElement.style.display = "none";
+    movementAllowed = false;
+    for (const prop in movement) movement[prop] = false;
+    return;
+  }
+
+  text = "Level Complete!";
   setTimeout(() => {
     text = "";
-  }, 3000);
-}
+  }, LEVEL_COMPLETE_DURATION);
 
-// TODO: review v
-function resetLevel() {
   boatLives = MAX_LIVES;
   distanceTraveled = 0;
 
@@ -1389,20 +1070,13 @@ function resetLevel() {
   unusedObstacles = [];
   obstacles = [];
 
-  loadObj(levelObstacles[level - 1]);
-
-  text = `LEVEL ${level}`;
-  setTimeout(() => {
-    text = "";
-  }, 2000);
+  loadObj(levelObstacles[level]);
 }
 
-// TODO: review v
 function respawnObstacles() {
   if (unusedObstacles.length <= 10) return; // Prevent excessive spawning
 
   let numToSpawn = THREE.MathUtils.randInt(5, 10); // Decide how many to spawn
-  console.log(`Spawning ${numToSpawn} obstacles`);
 
   // (0.5, 0.3, 2.8) boat pos
   for (let i = 0; i < numToSpawn; i++) {
@@ -1411,7 +1085,7 @@ function respawnObstacles() {
     let obstacle = unusedObstacles.pop(); // Get an obstacle from the pool
     obstacle.position.set(
       THREE.MathUtils.randFloat(0, 1),
-      0.3, // Y stays the same
+      levelObstacleOffsets[level], // Y stays the same
       -THREE.MathUtils.randFloat(0, 5)
     );
     obstacle.visible = true;
@@ -1421,20 +1095,22 @@ function respawnObstacles() {
   const spawnChance = Math.random();
   let powerUpPos = new THREE.Vector3(
     THREE.MathUtils.randFloat(0, 1),
-    0.3, // Y stays the same
+    0.2, // Y stays the same
     -THREE.MathUtils.randFloat(0, 5)
   );
 
   if (spawnChance < 0.25 && !heart.visible) {
     heart.position.copy(powerUpPos);
     heart.visible = true;
-  } else if (spawnChance < 0.5 && !heart.visible) {
+  } else if (spawnChance < 0.5 && !power.visible) {
     power.position.copy(powerUpPos);
     power.visible = true;
   }
 }
 
 function animate() {
+  renderer.render(scene, camera);
+  controls.update();
   // update time and delta_t
   // dt = clock.getDelta(); // get time since last frame
   dt = Math.min(clock.getDelta(), max_time_step); // make sure physics time step is sufficiently small
@@ -1508,35 +1184,124 @@ function animate() {
   // current_positions = updated_positions;
   updateMirroredPoints();
 
-  if (playerCollisionMesh) {
-    for (const obstacle of obstaclesArr) {
-      toObstacle.subVectors(obstacle.position, playerCollisionMesh.position);
-      if (
-        toObstacle.lengthSq() <
-        COLLISION_CHECK_RADIUS * COLLISION_CHECK_RADIUS
-      ) {
-        const collision = checkCollision(playerCollisionMesh, obstacle);
-        if (collision) {
-          if (toObstacle.dot(collision.minAxis) > 0) collision.minAxis.negate();
-          player.position.addScaledVector(
-            collision.minAxis,
-            collision.minOverlap
-          );
-          playerCollisionMesh.position.copy(player.position).add(boatBBOffset);
-          if (!isRocking && !hasImmunity) animateRocking();
-          boatVelocity = 0;
-        }
-      }
-    }
+  if (startScreenElement.style.display === "none") {
+    if (text) {
+      centerTextElement.style.display = "block";
 
-    controls.target.copy(player.position);
+      if (text === "3" || text === "2" || text === "1" || text === "GO!") {
+        centerTextElement.textContent = text;
+        centerTextElement.className = "countdown active"; // TODO: <- review this
+      } else if (text === "Game Over!") {
+        centerTextElement.innerHTML = `
+          <h1>${text}</h1>
+          <p>Your voyage through time has come to an end.</p>
+          <div class="stats">
+            <div class="stat-item">
+              <div class="stat-value">Level ${level + 1}: ${
+          timePeriods[level]
+        }</div>
+              <div class="stat-label">Level Reached</div>
+            </div>
+          </div>
+          <div class="stats">
+            <div class="stat-item">
+              <div class="stat-value">${(
+                distanceTraveled +
+                LEVEL_DISTANCE_THRESHOLD * level
+              ).toFixed(1)} km</div>
+              <div class="stat-label">Total Distance Sailed</div>
+            </div>
+          </div>
+          <div class="button" onclick="location.reload()">Try Again</div>
+        `;
+        centerTextElement.className = "game-over active"; // TODO: <- review this
+      } else if (text === "Level Complete!") {
+        centerTextElement.innerHTML = `
+          <h1>${text}</h1>
+          <p>You've successfully navigated through the ${
+            timePeriods[level - 1]
+          } time period!</p>
+          <div class="stats">
+            <div class="stat-item">
+              <div class="stat-value">Level ${level + 1}: ${
+          timePeriods[level]
+        }</div>
+              <div class="stat-label">Next Level</div>
+            </div>
+          </div>
+          <div class="stats">
+            <div class="stat-item">
+              <div class="stat-value">${boatLives}</div>
+              <div class="stat-label">Lives Remaining</div>
+            </div>
+          </div>
+        `;
+        centerTextElement.className = "level-complete active"; // TODO: <- review this
+      } else if (text === "Victory!") {
+        centerTextElement.innerHTML = `
+          <h1>${text}</h1>
+          <p>You've mastered the time stream and conquered all the time periods!</p>
+          <div class="stats">
+            <div class="stat-item">
+              <div class="stat-value">${(
+                LEVEL_DISTANCE_THRESHOLD * timePeriods.length
+              ).toFixed(1)} km</div>
+              <div class="stat-label">Total Distance Sailed</div>
+            </div>
+          </div>
+          <div class="stats">
+            <div class="stat-item">
+              <div class="stat-value">${boatLives}</div>
+              <div class="stat-label">Lives Remaining</div>
+            </div>
+          </div>
+          <div class="button" onclick="location.reload()">Play Again</div>
+        `;
+        centerTextElement.className = "victory active"; // TODO: <- review this
+      } else {
+        centerTextElement.classList.remove("countdown");
+        centerTextElement.classList.remove("game-over");
+        centerTextElement.classList.remove("level-complete");
+        centerTextElement.classList.remove("victory");
+        centerTextElement.textContent = text;
+      }
+    } else centerTextElement.style.display = "none";
+
+    const heart = '<span class="life-icon">❤</span>';
+    const emptyHeart = '<span class="life-icon empty">❤</span>';
+    const lives =
+      heart.repeat(boatLives) + emptyHeart.repeat(MAX_LIVES - boatLives);
+
+    gameTextElement.innerHTML = `
+      <h1>Level ${level + 1}: ${timePeriods[level]}</h1>
+      <div class="game-stat">
+        <span class="stat-icon">⚓</span>
+        <div>
+          <div>Lives</div>
+          <div class="lives-display">${lives}</div>
+        </div>
+      </div>
+      <div class="game-stat">
+        <span class="stat-icon">⏱️</span>
+        <div>
+          <div>Next Time Period: ${
+            level === timePeriods.length - 1
+              ? "Victory!"
+              : timePeriods[level + 1]
+          }</div>
+          <div class="distance-alert">${(
+            LEVEL_DISTANCE_THRESHOLD - distanceTraveled
+          ).toFixed(1)} km</div>
+          <div class="progress-container">
+            <div class="progress-bar" style="width: ${
+              (distanceTraveled / LEVEL_DISTANCE_THRESHOLD) * 100
+            }%"></div>
+          </div>
+        </div>
+      </div>
+    `; // TODO: <- review this
   }
 
-  // ============= //
-  // BOAT MOVEMENT //
-  // ============= //
-
-  // TODO: review v
   if (boat && heart && power) {
     let targetZRotation = Math.PI / 2;
     let targetYRotation = 0;
@@ -1578,24 +1343,18 @@ function animate() {
       (boat.rotation.z - Math.PI / 2) / 10
     );
 
-    if (movement.forward || movement.brake) physics.targetY = physics.minY;
+    if (movement.forward || movement.brake || movement.left || movement.right)
+      physics.targetY = physics.minY;
     else physics.targetY = physics.defaultY;
 
-    const buoyancyForce = calculateBuoyancyForce(boat.position, boatDimensions); // TODO: <- review
-    physics.targetY += buoyancyForce.y * 0.05;
-    physics.targetY = THREE.MathUtils.clamp(
-      physics.targetY,
-      physics.minY,
-      physics.maxY
+    const buoyancyForceY = calculateBuoyancyForce(
+      boat.position,
+      boatDimensions
     );
+    physics.targetY += buoyancyForceY * 0.05;
 
-    physics.velocity += (physics.targetY - boat.position.y) * 0.05;
+    physics.velocity += (physics.targetY - boat.position.y) * 0.1;
     boat.position.y += physics.velocity;
-    boat.position.y = THREE.MathUtils.clamp(
-      boat.position.y,
-      physics.minY,
-      physics.maxY
-    );
 
     if (movement.forward)
       velocity = Math.min(velocity + acceleration, maxSpeed);
@@ -1605,7 +1364,7 @@ function animate() {
     const movementX = new THREE.Vector3(direction.x * velocity, 0, 0);
     const movementZ = new THREE.Vector3(0, 0, direction.z * velocity);
 
-    const newBoatPosition = boat.position.add(movementX);
+    const newBoatPosition = boat.position.clone().add(movementX);
     newBoatPosition.x = THREE.MathUtils.clamp(newBoatPosition.x, 0.05, 0.95);
 
     boat.position.copy(newBoatPosition);
@@ -1616,15 +1375,53 @@ function animate() {
     );
 
     heart.position.sub(movementZ);
-    power.position.sub(movementZ);
 
     if (heart.position.z > 3.5) {
       heart.visible = false;
-      // heart.position.set(0, 10, 0); // TODO: maybe uncomment this
+      heart.position.set(0, 10, 0);
     }
+
+    if (
+      calculatePerpendicularDistance(boat.position, heart.position) <
+      COLLISION_CHECK_RADIUS * COLLISION_CHECK_RADIUS
+    ) {
+      heart.visible = false;
+      heart.position.set(0, 10, 0);
+      boatLives++;
+      if (boatLives > MAX_LIVES) boatLives = MAX_LIVES;
+
+      text = "Extra Life!";
+      setTimeout(() => {
+        text = "";
+      }, COLLECTIBLE_DURATION);
+    }
+
+    power.position.sub(movementZ);
+
     if (power.position.z > 3.5) {
       power.visible = false;
-      // power.position.set(0, 10, 0); // TODO: maybe uncomment this
+      power.position.set(0, 10, 0);
+    }
+
+    if (
+      calculatePerpendicularDistance(boat.position, power.position) <
+      COLLISION_CHECK_RADIUS * COLLISION_CHECK_RADIUS
+    ) {
+      power.visible = false;
+      power.position.set(0, 10, 0);
+      maxSpeed *= 2;
+      acceleration *= 2;
+      isImmune = true;
+      setTimeout(() => {
+        maxSpeed /= 2;
+        acceleration /= 2;
+        isImmune = false;
+      }, POWER_DURATION);
+
+      text = "Power Up!";
+      setTimeout(() => {
+        text = "";
+      }, COLLECTIBLE_DURATION);
     }
 
     for (let i = activeObstacles.length - 1; i >= 0; i--) {
@@ -1633,7 +1430,7 @@ function animate() {
 
       if (obstacle.position.z > 3.5) {
         obstacle.visible = false;
-        // obstacle.position.set(0, 10, 0); // TODO: maybe uncomment this
+        obstacle.position.set(0, 10, 0);
         activeObstacles.splice(i, 1);
         unusedObstacles.push(obstacle);
       }
@@ -1645,93 +1442,37 @@ function animate() {
         handleCollision();
     }
 
-    if (
-      calculatePerpendicularDistance(boat.position, heart.position) <
-      COLLISION_CHECK_RADIUS * COLLISION_CHECK_RADIUS
-    ) {
-      heart.visible = false;
-      // heart.position.set(0, 10, 0); // TODO: maybe uncomment this
-      boatLives++;
-
-      // text = "Life+1";
-      // setTimeout(() => {
-      //   text = "";
-      // }, 1000);
-    }
-
-    if (
-      calculatePerpendicularDistance(boat.position, power.position) <
-      COLLISION_CHECK_RADIUS * COLLISION_CHECK_RADIUS
-    ) {
-      power.visible = false;
-      // power.position.set(0, 10, 0); // TODO: maybe uncomment this
-      maxSpeed *= 2;
-      acceleration *= 2;
-      isImmune = true;
-      setTimeout(() => {
-        maxSpeed /= 2;
-        acceleration /= 2;
-        isImmune = false;
-      }, POWER_DURATION);
-
-      // text = "Rush!!Just keep going forward!";
-      // setTimeout(() => {
-      //   text = "";
-      // }, 10000);
-    }
-
     distanceTraveled -= movementZ.z;
 
+    if (level < timePeriods.length) {
+      scene.background = backgroundTextures[level];
+      ambientLight.color.copy(ambientLightColors[level]);
+      colorParams.r = waterColors[level].r;
+      colorParams.g = waterColors[level].g;
+      colorParams.b = waterColors[level].b;
+      updateFluidColor();
+    }
+
     if (distanceTraveled >= LEVEL_DISTANCE_THRESHOLD) {
-      level++;
-      resetLevel(); // TODO: <- review
+      if (level === timePeriods.length) return;
+      resetLevel();
     }
 
-    if (unusedObstacles.length > 10) {
-      respawnObstacles(); // TODO: <- review
-    }
+    if (unusedObstacles.length > 10) respawnObstacles();
 
-    if (movement.freeCamera) camera.lookAt(boat.position);
-    else {
-      if (direction.angleTo(new THREE.Vector3(1, 0, 0)) > (3 * Math.PI) / 4)
-        direction = new THREE.Vector3(0, 0, -1).applyAxisAngle(up, Math.PI / 4);
-      if (direction.angleTo(new THREE.Vector3(1, 0, 0)) < Math.PI / 4)
-        direction = new THREE.Vector3(0, 0, -1).applyAxisAngle(
-          up,
-          -Math.PI / 4
-        );
-      const lookAtOffset = direction.clone().multiplyScalar(10);
-      const lookAhead = boat.position.clone().add(lookAtOffset);
-      camera.lookAt(lookAhead);
+    if (direction.angleTo(new THREE.Vector3(1, 0, 0)) > (2 * Math.PI) / 3)
+      direction = new THREE.Vector3(0, 0, -1).applyAxisAngle(up, Math.PI / 6);
+    if (direction.angleTo(new THREE.Vector3(1, 0, 0)) < Math.PI / 3)
+      direction = new THREE.Vector3(0, 0, -1).applyAxisAngle(up, -Math.PI / 6);
+    const lookAtOffset = direction.clone().multiplyScalar(10);
+    const lookAhead = boat.position.clone().add(lookAtOffset);
+    camera.lookAt(lookAhead);
 
-      const cameraOffset = direction.clone().multiplyScalar(-0.5);
-      cameraOffset.y = 0.25;
-      const cameraPosition = boat.position.clone().add(cameraOffset);
-      camera.position.lerp(cameraPosition, 0.5);
-    }
-
-    // 🎯 **Update HUD Text**
-    // TODO: review v
-    document.getElementById("directionText").innerText =
-      `Life: ${boatLives}\n` +
-      `Level: ${level}\n` +
-      `Distance till exit: ${(
-        LEVEL_DISTANCE_THRESHOLD - distanceTraveled
-      ).toFixed(1)}\n`;
-
-    // 🎯 **Update Centered Text**
-    // TODO: review v
-    document.getElementById("centerText").innerText = text;
-    document.getElementById("centerText").style.display = text
-      ? "block"
-      : "none"; // Show if text is not empty
-    // `Score: ${score}\n` +
-    // `Position: (${boat.position.x.toFixed(2)}, ${boat.position.y.toFixed(2)}, ${boat.position.z.toFixed(2)})\n` +
-    // `Velocity: ${velocity.toFixed(2)}`;
+    const cameraOffset = direction.clone().multiplyScalar(-0.5);
+    cameraOffset.y = 0.25;
+    const cameraPosition = boat.position.clone().add(cameraOffset);
+    camera.position.lerp(cameraPosition, 0.25);
   }
-
-  renderer.render(scene, camera);
-  controls.update();
 }
 
 renderer.setAnimationLoop(animate);
@@ -1750,28 +1491,28 @@ function updateObstacles() {
   if (movement.right) moveX += moveSpeed; // Move right
 
   // Apply movement to all obstacle objects
-  if (moveX !== 0 || moveZ !== 0) {
-    for (let i = 0; i < obstacle_objects_in_scene.length; i++) {
-      obstacle_objects_in_scene[i].position.x += moveX;
-      obstacle_objects_in_scene[i].position.z += moveZ;
-    }
-    // Scroll wall texture in the +z direction at the same rate
-    const scroll_speed = moveSpeed * 23; // Adjust scroll speed
+  // if (moveX !== 0 || moveZ !== 0) {
+  //   for (let i = 0; i < obstacles.length; i++) {
+  //     obstacles[i].position.x += moveX;
+  //     obstacles[i].position.z += moveZ;
+  //   }
+  // Scroll wall texture in the +z direction at the same rate
+  const scroll_speed = moveSpeed * 23; // Adjust scroll speed
 
-    // top facing wall material scroll
-    rockMaterial.map.offset.y += moveZ * scroll_speed;
-    rockMaterial.normalMap.offset.y += moveZ * scroll_speed;
-    rockMaterial.displacementMap.offset.y += moveZ * scroll_speed;
-    rockMaterial.roughnessMap.offset.y += moveZ * scroll_speed;
-    rockMaterial.aoMap.offset.y += moveZ * scroll_speed;
+  // top facing wall material scroll
+  rockMaterial.map.offset.y += moveZ * scroll_speed;
+  rockMaterial.normalMap.offset.y += moveZ * scroll_speed;
+  rockMaterial.displacementMap.offset.y += moveZ * scroll_speed;
+  rockMaterial.roughnessMap.offset.y += moveZ * scroll_speed;
+  rockMaterial.aoMap.offset.y += moveZ * scroll_speed;
 
-    // side facing wall material scroll
-    rockMaterial_inner.map.offset.x += moveZ * scroll_speed;
-    rockMaterial_inner.normalMap.offset.x += moveZ * scroll_speed;
-    rockMaterial_inner.displacementMap.offset.x += moveZ * scroll_speed;
-    rockMaterial_inner.roughnessMap.offset.x += moveZ * scroll_speed;
-    rockMaterial_inner.aoMap.offset.x += moveZ * scroll_speed;
-  }
+  // side facing wall material scroll
+  rockMaterial_inner.map.offset.x += moveZ * scroll_speed;
+  rockMaterial_inner.normalMap.offset.x += moveZ * scroll_speed;
+  rockMaterial_inner.displacementMap.offset.x += moveZ * scroll_speed;
+  rockMaterial_inner.roughnessMap.offset.x += moveZ * scroll_speed;
+  rockMaterial_inner.aoMap.offset.x += moveZ * scroll_speed;
+  // }
 
   requestAnimationFrame(updateObstacles); // Keep updating smoothly
 }
@@ -2166,11 +1907,6 @@ function calculateBuoyancyForce(boatPosition, boatDimensions) {
   const waterHeight = calculateWaterHeight();
   const boatBottomHeight = boatPosition.y - boatDimensions.y / 2;
 
-  if (params.show_water_level) {
-    waterLevelMesh.position.set(boatPosition.x, waterHeight, boatPosition.z);
-    waterLevelMesh.visible = true;
-  } else waterLevelMesh.visible = false;
-
   const baseArea = boatDimensions.x * boatDimensions.z;
   const submergedDepth = Math.max(
     0,
@@ -2178,12 +1914,12 @@ function calculateBuoyancyForce(boatPosition, boatDimensions) {
   );
   const submergedVolume = baseArea * submergedDepth;
 
-  const buoyancyMagnitude =
+  return (
     rest_density() *
     params.grav_strength *
     submergedVolume *
-    params.buoyancy_strength;
-  return new THREE.Vector3(0, buoyancyMagnitude, 0);
+    params.buoyancy_strength
+  );
 }
 
 function calculateWaterHeight() {
@@ -2356,9 +2092,9 @@ function compute_object_interaction_acceleration(i) {
   let return_force = new THREE.Vector3(0, 0, 0);
   const simple_force = new THREE.Vector3(1, 1, 1);
 
-  for (let obj_ind = 0; obj_ind < obstacle_objects_in_scene.length; obj_ind++) {
+  for (let obj_ind = 0; obj_ind < obstacles.length; obj_ind++) {
     const particle_position = fluid_points[i].position.clone();
-    let object_position = obstacle_objects_in_scene[obj_ind].position.clone();
+    let object_position = obstacles[obj_ind].position.clone();
     object_position.y = particle_position.y;
 
     const relative_position = particle_position.sub(object_position);
