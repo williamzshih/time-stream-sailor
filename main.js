@@ -946,7 +946,7 @@ function animate() {
 
       if (text === "3" || text === "2" || text === "1" || text === "GO!") {
         centerTextElement.textContent = text;
-        centerTextElement.className = "countdown active"; // TODO: <- review this
+        centerTextElement.className = "countdown";
       } else if (text === "Game Over!") {
         centerTextElement.innerHTML = `
           <h1>${text}</h1>
@@ -970,7 +970,7 @@ function animate() {
           </div>
           <div class="button" onclick="location.reload()">Try Again</div>
         `;
-        centerTextElement.className = "game-over active"; // TODO: <- review this
+        centerTextElement.className = "game-over";
       } else if (text === "Level Complete!") {
         centerTextElement.innerHTML = `
           <h1>${text}</h1>
@@ -992,8 +992,9 @@ function animate() {
             </div>
           </div>
         `;
-        centerTextElement.className = "level-complete active"; // TODO: <- review this
+        centerTextElement.className = "level-complete";
       } else if (text === "Victory!") {
+        if (centerTextElement.className === "victory") return;
         centerTextElement.innerHTML = `
           <h1>${text}</h1>
           <p>You've mastered the time stream and conquered all the time periods!</p>
@@ -1013,7 +1014,7 @@ function animate() {
           </div>
           <div class="button" onclick="location.reload()">Play Again</div>
         `;
-        centerTextElement.className = "victory active"; // TODO: <- review this
+        centerTextElement.className = "victory";
       } else {
         centerTextElement.classList.remove("countdown");
         centerTextElement.classList.remove("game-over");
@@ -1034,7 +1035,7 @@ function animate() {
         <span class="stat-icon">⚓</span>
         <div>
           <div>Lives</div>
-          <div class="lives-display">${lives}</div>
+          <div>${lives}</div>
         </div>
       </div>
       <div class="game-stat">
@@ -1045,7 +1046,7 @@ function animate() {
               ? "Victory!"
               : timePeriods[level + 1]
           }</div>
-          <div class="distance-alert">${(
+          <div class="distance">${(
             LEVEL_DISTANCE_THRESHOLD - distanceTraveled
           ).toFixed(1)} km</div>
           <div class="progress-container">
@@ -1055,7 +1056,7 @@ function animate() {
           </div>
         </div>
       </div>
-    `; // TODO: <- review this
+    `;
   }
 
   if (boat && heart && power) {
